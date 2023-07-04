@@ -143,22 +143,16 @@ def getRunList():
   runList =[]
   exceptions = [7330, 7471, 7495,7502,7522,7525, 7569, 7570, 7667,7673, 7685,7761,7787, 8314 ]
   #need a run dictionary
-  runDict = {"dirpirun":0, "run":0,"dirpi":1}
   dictList = []
   for line in lines:
     if line =="": continue
     dirpirun   = int(line.split(" ")[0])
     run   = int(line.split(" ")[1])
     dirpi = int(line.split(" ")[2])
-   
-    dictList.append(runDict)
-    if (run>8500 and run<8400 and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 ) and run not in exceptions and not (run>7536 and run<7562) ):
-      runList.append(run)
-      runDict["run"]=run
-      runDict["dirpi"]=dirpi
-      runDict["dirpirun"]=dirpirun
-  print (runList)
-  return runList, runDict
+    if (run>7000 and run<8400 and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 ) and run not in exceptions and not (run>7536 and run<7562) ):
+      runList.append([run, dirpirun, dirpi])
+#  print (runList)
+  return runList
   
   
 def cleanRun(target):
@@ -171,20 +165,42 @@ def cleanRun(target):
     for entry in intree:
         tP+=intree.tP
         # if its too early, toss it out
+        
+def getDuplicates(lst):
+    unique_rows = set()
+    duplicate_rows = []
+    for row in lst:
+        last_two_elements = row[-2:]  # Get the last two elements of the row
+        row_tuple = tuple(last_two_elements)
+        if row_tuple in unique_rows:
+            duplicate_rows.append(row)
+            duplicate_rows.append(next(filter(lambda x: tuple(x[-2:]) == row_tuple, lst)))
+        else:
+            unique_rows.add(row_tuple)
+    return duplicate_rows
 
-def combineRuns(lists):
+def combineRuns(lists, runList):
     for list in lists:
         #open a new .root file
-        firstRun = str(list[0])
-  #      comboRun = r.TFile("Run"+firstRun+"_combined.root", "RECREATE")
-  #      mTree = r.TTree("merged","merged")
-        cmd ="hadd -f "+dir+"Run"+firstRun+"_combined.root "
-        for drun in list:
-            cmd+=dir+"run"+str(drun)+"_pulses.root "
+        dirpi = list[0]
+        dirpiNRun = [list[1][0], dirpi]
+        for row in reversed(runList):
+            if row[-2:] == dirpiNRun:
+                firstRun = row[0]
+       # comboRun = r.TFile("Run"+firstRun+"_combined.root", "RECREATE")
+    #      mTree = r.TTree("merged","merged")
+        cmd ="hadd -f "+dir+"Run"+str(firstRun)+"_combined.root "
+        for drun in list[1]:
+            dirpiNRun = [drun, dirpi]
+            for row in reversed(runList):
+                if row[-2:] == dirpiNRun:
+                    run = row[0]
+            #run = next(filter(lambda x: tuple(x[-2:]) == dirpiNRun, list[1]))
+            print ("found global run:", run ," ", drun, " ",dirpi)
+            cmd+=dir+"run"+str(run)+"_pulses.root "
        #     infile = r.TFile(dir +"Run"+str(run)+"_pulses.root", "READ")
        #     intree = infile.Get("pulses")
        #     tlist.Add(intree)
-       #fuck this, doesn't actually work (yay ROOT)
        # mTree = r.TTree.MergeTrees(tlist)
        # comboRun.Write(tlist)
         os.system(cmd)
@@ -194,17 +210,23 @@ if __name__ == "__main__":
   dir = './pulse_data/'
   exceptions = []
  # f = open("DiRPiRuns.txt","w")
-  [runList, runDict] = getRunList()
+  runList = getRunList()
+#  print(runList)
+  dictList = []
+  duplicates= getDuplicates(runList)
+  print("duplicates:")
+  for row in duplicates:
+    print(row)
   # make .root files for runs in runlist
   for run in runList:
     url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run)+"/Run"+str(run)+"_pulses.ant"
     try:
-        downloadAnt(run,dir)
+       # downloadAnt(run,dir)
         file = dir +'Run'+str(run)+'_pulses.ant'
         rfile = dir +'Run'+str(run)+'_pulses.root'
         output = dir +'Run'+str(run)+'_pulses.root'
-        makeTree(file, output)
-        countPulses(rfile)
+       # makeTree(file, output)
+     #   countPulses(rfile)/plots/230703225358_68513.gif
     except:
         print("skipping run "+ str(run))
         exceptions.append(run)
@@ -214,10 +236,9 @@ if __name__ == "__main__":
   #combine runs as noted in spreadsheet
   lists = [
  # [264,279],
-  [7681,7682,7683]
+  [1, [i for i in range(245, 277)]]
   ]
-  combineRuns(lists)
- 
+  combineRuns(lists,runList)
          
     #clean each remaining run
     #for run in combined runs:
