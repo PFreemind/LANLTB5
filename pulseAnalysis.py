@@ -2,6 +2,7 @@ import ROOT as r
 import numpy as np
 from array import array
 import requests
+import os
 
 # scripting to parse and plot david's pulse data from 2022 November Beam Development
 
@@ -126,10 +127,10 @@ def countPulses(file):
   print(nCh1, nCh2, nCh5)
   return (nCh1, nCh2, nCh5)
     
-def downloadAnt(run):
+def downloadAnt(run, dir = './'):
     resp = requests.get(url)
     ant = resp.text
-    f = open("Run"+str(run)+"_pulses.ant","w")
+    f = open(dir+"Run"+str(run)+"_pulses.ant","w")
     f.write(ant)
   
 def getRunList():
@@ -140,7 +141,7 @@ def getRunList():
   txt = resp.text
   lines = txt.split("\n")
   runList =[]
-  exceptions = [7330, 7471, 7495,7502,7522,7525, 7569, 7570, 7667,7673, 7685,7761,7787 ]
+  exceptions = [7330, 7471, 7495,7502,7522,7525, 7569, 7570, 7667,7673, 7685,7761,7787, 8314 ]
   #need a run dictionary
   runDict = {"dirpirun":0, "run":0,"dirpi":1}
   dictList = []
@@ -151,7 +152,7 @@ def getRunList():
     dirpi = int(line.split(" ")[2])
    
     dictList.append(runDict)
-    if (run>7000 and run<8314 and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 ) and run not in exceptions and not (run>7536 and run<7562) ):
+    if (run>8500 and run<8400 and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 ) and run not in exceptions and not (run>7536 and run<7562) ):
       runList.append(run)
       runDict["run"]=run
       runDict["dirpi"]=dirpi
@@ -159,43 +160,68 @@ def getRunList():
   print (runList)
   return runList, runDict
   
+  
+def cleanRun(target):
+    # make a new tree and file to write to
+    cleanRun = r.TFile(firstRun+"_combined.root", "RECREATE")
+    tree = r.TTree("cleaned","cleaned")
+    # get average pulse time for each event
+    evt = 0
+    intree = target.Get("pulses")
+    for entry in intree:
+        tP+=intree.tP
+        # if its too early, toss it out
+
+def combineRuns(lists):
+    for list in lists:
+        #open a new .root file
+        firstRun = str(list[0])
+  #      comboRun = r.TFile("Run"+firstRun+"_combined.root", "RECREATE")
+  #      mTree = r.TTree("merged","merged")
+        cmd ="hadd -f "+dir+"Run"+firstRun+"_combined.root "
+        for drun in list:
+            cmd+=dir+"run"+str(drun)+"_pulses.root "
+       #     infile = r.TFile(dir +"Run"+str(run)+"_pulses.root", "READ")
+       #     intree = infile.Get("pulses")
+       #     tlist.Add(intree)
+       #fuck this, doesn't actually work (yay ROOT)
+       # mTree = r.TTree.MergeTrees(tlist)
+       # comboRun.Write(tlist)
+        os.system(cmd)
+  
 if __name__ == "__main__":
   runs = [8312, 8313] # [8122, 8123, 8124, 8125, 8126]#8116, 8117, 8118, 8119, 8120]
-  dir = './'
-  
+  dir = './pulse_data/'
+  exceptions = []
  # f = open("DiRPiRuns.txt","w")
-  runList = getRunList()
+  [runList, runDict] = getRunList()
   # make .root files for runs in runlist
   for run in runList:
     url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run)+"/Run"+str(run)+"_pulses.ant"
     try:
-        downloadAnt(run)
+        downloadAnt(run,dir)
         file = dir +'Run'+str(run)+'_pulses.ant'
         rfile = dir +'Run'+str(run)+'_pulses.root'
-        output = dir +'run'+str(run)+'_pulses.root'
+        output = dir +'Run'+str(run)+'_pulses.root'
         makeTree(file, output)
         countPulses(rfile)
     except:
         print("skipping run "+ str(run))
         exceptions.append(run)
   print("the list of exceptions: ",exceptions)
+ 
+ 
   #combine runs as noted in spreadsheet
   lists = [
-  [264,279],
-  [7379,7384,7389]
+ # [264,279],
+  [7681,7682,7683]
   ]
-    
-  for list in lists:
-        #open a new .root file
-        firstRun = str(list[0])
-        comboRun = r.TFile(firstRun+"_combined.root", "RECREATE")
-        tree = r.TTree("merged","merged")
-        for drun in list:
-            
-            infile = r.TFile(dir +"Run"+str(run)+"_pulses.root", "READ")
-            intree = infile.Get("pulses")
-            tree.Merge(tree, intree)
-        comboRun.Write(tree)
+  combineRuns(lists)
+ 
+         
+    #clean each remaining run
+    #for run in combined runs:
+     #   cleanRun(run)
     
 
    # lines =ant.split("\n")
