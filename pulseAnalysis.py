@@ -149,9 +149,11 @@ def getRunList():
     dirpirun   = int(line.split(" ")[0])
     run   = int(line.split(" ")[1])
     dirpi = int(line.split(" ")[2])
-    if (run>7000 and run<8400 and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 ) and run not in exceptions and not (run>7536 and run<7562) ):
+    if (run>7000 and run<12000 and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 ) and run not in exceptions and not (run>7536 and run<7562) ):
       runList.append([run, dirpirun, dirpi])
 #  print (runList)
+  #trim empty runs from the list
+  runList = trimEmptyRuns(runList)
   return runList
   
   
@@ -169,7 +171,13 @@ def cleanRun(target):
 def getDuplicates(lst):
     unique_rows = set()
     duplicate_rows = []
+    uniques = []
     for row in lst:
+        run = row[0]
+        dirpi = row[2]
+       # if not hasDataOnCms(dirpi, run):
+        #    print("skipping empty run: ", run)
+         #   continue
         last_two_elements = row[-2:]  # Get the last two elements of the row
         row_tuple = tuple(last_two_elements)
         if row_tuple in unique_rows:
@@ -177,7 +185,8 @@ def getDuplicates(lst):
             duplicate_rows.append(next(filter(lambda x: tuple(x[-2:]) == row_tuple, lst)))
         else:
             unique_rows.add(row_tuple)
-    return duplicate_rows
+            uniques.append(row)
+    return duplicate_rows, uniques
 
 def combineRuns(lists, runList):
     for list in lists:
@@ -205,6 +214,82 @@ def combineRuns(lists, runList):
        # comboRun.Write(tlist)
         os.system(cmd)
   
+#def getLYSOCal(defaultRun, testRun):
+#make histograms with fits, find scaling parameter between template and test, get keV calibration from that
+
+#def cleanRun(run):
+# evt =0
+#count =0
+#meantP =0
+#open root file
+#tree = file.Get("pulses")
+# for entry in tree:
+#  if evt == tree.evt
+#    meantP+=tree.tP
+#  else
+#   meantP  =meantP /count
+#    if meantP <45000 or meantP>55000: # trigger is out of time, toss events
+#        badEvts.append(evt)
+#   evt = tree.evt
+#   meantP=tree.tP
+#   #count=0
+#  count+=1
+# evt = tree.evt
+#for entry in tree:
+#  if evt in badEvts:
+#   continus
+#else:
+# write to cleaned run file/tuple
+
+#def plotting():
+    #plotting for all runs
+    # v vs t colz to check for out of time rf triggers
+    #lyso cal included here
+    #npulses vs evt/time
+def trimEmptyRuns(runList):
+    import paramiko
+
+    # SSH connection details
+    print("going")
+    hostname = 'tau.physics.ucsb.edu'
+    port = 22
+    username = 'pmfreeman'
+    password = 'sefadfas'
+
+    # Remote directory path
+    for row in runList:
+        dirpi = str(row[2])
+        run = str(row[1])
+        remote_directory = '/net/cms26/cms26r0/pmfreeman/XRD/DiRPi_v3/dirpi'+str(dirpi)+'/Run'+str(run)
+
+        # Create an SSH client
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
+
+        # Automatically add the server's host key (uncomment the line below if necessary)
+        # client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        # Connect to the remote host
+        client.connect(hostname, port, username, password)
+
+        # Open an SFTP session on the SSH connection
+        sftp = client.open_sftp()
+
+        # List the contents of the remote directory
+        directory_contents = sftp.listdir(remote_directory)
+
+        # Print the directory contents
+        count=0
+        for item in directory_contents:
+            print(item)
+            count+=1
+            break
+        if count>0:
+    # Close the SFTP session and the SSH connection
+    sftp.close()
+    client.close()
+#oh fuck anything involving ssh?
+
 if __name__ == "__main__":
   runs = [8312, 8313] # [8122, 8123, 8124, 8125, 8126]#8116, 8117, 8118, 8119, 8120]
   dir = './pulse_data/'
@@ -213,13 +298,21 @@ if __name__ == "__main__":
   runList = getRunList()
 #  print(runList)
   dictList = []
-  duplicates= getDuplicates(runList)
+  [duplicates, uniques] = getDuplicates(runList)
+ 
   print("duplicates:")
   for row in duplicates:
-    print(row)
+    print(row[1], row[2], row[0])
+  
+  print("uniques:")
+  for row in uniques:
+    print(row[1], row[2], row[0])
+
   # make .root files for runs in runlist
+  count = 0
   for run in runList:
     url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run)+"/Run"+str(run)+"_pulses.ant"
+    dirpi = runList[2]
     try:
        # downloadAnt(run,dir)
         file = dir +'Run'+str(run)+'_pulses.ant'
@@ -230,13 +323,16 @@ if __name__ == "__main__":
     except:
         print("skipping run "+ str(run))
         exceptions.append(run)
+    count+=1
   print("the list of exceptions: ",exceptions)
- 
+  
  
   #combine runs as noted in spreadsheet
   lists = [
  # [264,279],
-  [1, [i for i in range(245, 277)]]
+  [1, [i for i in range(245, 277)]],
+  [8, [313,314]]
+  
   ]
   combineRuns(lists,runList)
          
@@ -251,3 +347,4 @@ if __name__ == "__main__":
     #    pline = line.split(" ")
     #    parsed.append(line)
    
+
