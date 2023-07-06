@@ -284,10 +284,12 @@ def trimEmptyRuns(runList):
             print(item)
             count+=1
             break
-        if count>0:
+        if count==0:
+            runLisst.remove(row)
     # Close the SFTP session and the SSH connection
     sftp.close()
     client.close()
+    return runList
 #oh fuck anything involving ssh?
 
 if __name__ == "__main__":
@@ -296,6 +298,7 @@ if __name__ == "__main__":
   exceptions = []
  # f = open("DiRPiRuns.txt","w")
   runList = getRunList()
+  print (runList)
 #  print(runList)
   dictList = []
   [duplicates, uniques] = getDuplicates(runList)
@@ -334,7 +337,7 @@ if __name__ == "__main__":
   [8, [313,314]]
   
   ]
-  combineRuns(lists,runList)
+#  combineRuns(lists,runList)
          
     #clean each remaining run
     #for run in combined runs:
