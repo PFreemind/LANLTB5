@@ -13,10 +13,10 @@ r.kOrange+2,
 r.kRed+2,
 ]
 color =[
-r.kBlue -9,
+r.kBlue -10,
 r.kBlue ,
 r.kBlue -6,
-r.kBlue+2,
+r.kBlack,
 ]
 
 dir = "./plots"

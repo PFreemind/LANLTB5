@@ -129,13 +129,13 @@ def countPulses(file):
   print(nCh1, nCh2, nCh5)
   return (nCh1, nCh2, nCh5)
     
-def downloadAnt(run, dir = './'):
+def downloadAnt(run, url, dir = './pulse_data/'):
     resp = requests.get(url)
     ant = resp.text
     f = open(dir+"Run"+str(run)+"_pulses.ant","w")
     f.write(ant)
   
-def getRunList(start = 6000, stop = 7000):
+def getRunList(start = 6800, stop = 6900):
   #get list of dirpi runs
     #    parse it for LANL devices/run numbers:
   urlist = "http://cms2.physics.ucsb.edu/DiRPiRuns"
@@ -151,7 +151,7 @@ def getRunList(start = 6000, stop = 7000):
     dirpirun   = int(line.split(" ")[0])
     run   = int(line.split(" ")[1])
     dirpi = int(line.split(" ")[2])
-    if (run>start and run<stop and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 ) and run not in exceptions and not (run>7536 and run<7562) ):
+    if (run>start and run<stop and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 or dirpi == 5) and run not in exceptions and not (run>7536 and run<7562) ):
       runList.append([run, dirpirun, dirpi])
 #  print (runList)
   #trim empty runs from the list
@@ -294,11 +294,14 @@ def combineRuns(lists, runList):
        # comboRun = r.TFile("Run"+firstRun+"_combined.root", "RECREATE")
     #      mTree = r.TTree("merged","merged")
         cmd ="hadd -f "+dir+"Run"+str(firstRun)+"_combined.root "
+        run=0
         for drun in lst[1]:
             dirpiNRun = [drun, dirpi]
             for row in reversed(runList):
                 if row[-2:] == dirpiNRun:
                     run = row[0]
+                else:
+                    continue
             #run = next(filter(lambda x: tuple(x[-2:]) == dirpiNRun, lst[1]))
             print ("found global run:", run ," ", drun, " ",dirpi)
             cmd+=dir+"run"+str(run)+"_pulses.root "
@@ -378,7 +381,7 @@ if __name__ == "__main__":
   exceptions = []
  # f = open("DiRPiRuns.txt","w")
   runList = getRunList()
-  print (runList)
+  #print ("runlist: ")
 #  print(runList)
   dictList = []
   [duplicates, uniques] = getDuplicates(runList)
@@ -390,26 +393,27 @@ if __name__ == "__main__":
   print("uniques:")
   for row in uniques:
     print(row[1], row[2], row[0])
-
+  runList = uniques
   # make .root files for runs in runlist
   count = 0
-  '''
+  
   for run in runList:
-    url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run)+"/Run"+str(run)+"_pulses.ant"
+    url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run[0])+"/Run"+str(run[0])+"_pulses.ant"
     dirpi = runList[2]
     try:
-       # downloadAnt(run,dir)
-        file = dir +'Run'+str(run)+'_pulses.ant'
-        rfile = dir +'Run'+str(run)+'_pulses.root'
-        output = dir +'Run'+str(run)+'_pulses.root'
-       # makeTree(file, output)
+        downloadAnt(str(run[0]), url, dir)
+        file = dir +'Run'+str(run[0])+'_pulses.ant'
+        rfile = dir +'Run'+str(run[0])+'_pulses.root'
+        output = dir +'Run'+str(run[0])+'_pulses.root'
+        makeTree(file, output)
      #   countPulses(rfile)/plots/230703225358_68513.gif
     except:
-        print("skipping run "+ str(run))
+        print("skipping run "+ str(run[0]))
+        print (url)
         exceptions.append(run)
     count+=1
   print("the list of exceptions: ",exceptions)
- '''
+ 
  
   #combine runs as noted in spreadsheet
   runLists = [
