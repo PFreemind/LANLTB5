@@ -135,7 +135,7 @@ def downloadAnt(run, dir = './'):
     f = open(dir+"Run"+str(run)+"_pulses.ant","w")
     f.write(ant)
   
-def getRunList():
+def getRunList(start = 6000, stop = 7000):
   #get list of dirpi runs
     #    parse it for LANL devices/run numbers:
   urlist = "http://cms2.physics.ucsb.edu/DiRPiRuns"
@@ -151,7 +151,7 @@ def getRunList():
     dirpirun   = int(line.split(" ")[0])
     run   = int(line.split(" ")[1])
     dirpi = int(line.split(" ")[2])
-    if (run>7000 and run<12000 and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 ) and run not in exceptions and not (run>7536 and run<7562) ):
+    if (run>start and run<stop and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 ) and run not in exceptions and not (run>7536 and run<7562) ):
       runList.append([run, dirpirun, dirpi])
 #  print (runList)
   #trim empty runs from the list
@@ -287,6 +287,7 @@ def combineRuns(lists, runList):
         #open a new .root file
         dirpi = lst[0]
         dirpiNRun = [lst[1][0], dirpi]
+        firstRun = 0
         for row in reversed(runList):
             if row[-2:] == dirpiNRun:
                 firstRun = row[0]
@@ -310,30 +311,6 @@ def combineRuns(lists, runList):
   
 #def getLYSOCal(defaultRun, testRun):
 #make histograms with fits, find scaling parameter between template and test, get keV calibration from that
-
-#def cleanRun(run):
-# evt =0
-#count =0
-#meantP =0
-#open root file
-#tree = file.Get("pulses")
-# for entry in tree:
-#  if evt == tree.evt
-#    meantP+=tree.tP
-#  else
-#   meantP  =meantP /count
-#    if meantP <45000 or meantP>55000: # trigger is out of time, toss events
-#        badEvts.append(evt)
-#   evt = tree.evt
-#   meantP=tree.tP
-#   #count=0
-#  count+=1
-# evt = tree.evt
-#for entry in tree:
-#  if evt in badEvts:
-#   continus
-#else:
-# write to cleaned run file/tuple
 
 #def plotting():
     #plotting for all runs
@@ -435,14 +412,14 @@ if __name__ == "__main__":
  '''
  
   #combine runs as noted in spreadsheet
-  lists = [
+  runLists = [
  # [264,279],
-  [1, [i for i in range(245, 277)] ],
-  [8, [313,314] ],
-  [8, [300,294,288,282,276,270,264,258,252,246] ],
-  
+#  [1, [i for i in range(245, 277)] ],
+#  [8, [313,314] ],
+#  [8, [300,294,288,282,276,270,264,258,252,246] ],
+    [5, [i for i in range(50, 59)] ]
   ]
-  combineRuns(lists,runList)
+  combineRuns(runLists,runList)
 
     #clean each remaining run
     #for run in combined runs:
