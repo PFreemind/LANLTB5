@@ -48,7 +48,6 @@ def makeTree(input, output):
   NPE =  array('f', [0])
   keV =  array('f', [0])
   
-  t.Branch("nP", nP, "nP/F")
   t.Branch("evt", evt, "evt/F")
   t.Branch("ch", ch, "ch/F")
   t.Branch("tP", tP, "tP/F")
@@ -66,7 +65,6 @@ def makeTree(input, output):
   #  print(count)
   #  print(val)
     evt[0] = (float(val[0]) )
-    nP[0] = (float(val[3]) )
     ch[0] = int(val[9])
     #stupid hardcoing for 8125
     #if val[11] == '795483.43\x0050':
@@ -155,113 +153,21 @@ def getRunList():
       runList.append([run, dirpirun, dirpi])
 #  print (runList)
   #trim empty runs from the list
-#  runList = trimEmptyRuns(runList)
+  runList = trimEmptyRuns(runList)
   return runList
   
   
-def cleanRun(target, t0 = 48000, t1=50000, LYSO=False):
+def cleanRun(target):
     # make a new tree and file to write to
-    cleanRun = r.TFile.Open(target+".clean", "RECREATE")
+    cleanRun = r.TFile(firstRun+"_combined.root", "RECREATE")
     tree = r.TTree("cleaned","cleaned")
-      
-    evtb =  array('f', [0])
-    tS  =  array('f', [0])
-    tE  =  array('f', [0])
-    nP  =  array('f', [0])
-    n1  =  array('f', [0])
-    n2  =  array('f', [0])
-    n3  =  array('f', [0])
-    n4  =  array('f', [0])
-    rms =  array('f', [0])
-    ch  =  array('f', [0])
-    pC  =  array('f', [0])
-    tP  =  array('f', [0])
-    area=  array('f', [0])
-    amp =  array('f', [0])
-    width= array('f', [0])
-    NPE =  array('f', [0])
-    keV =  array('f', [0])
-      
- #   tree.Branch("nP", nP, "nP/F")
-    tree.Branch("evt", evtb, "evt/F")
-    tree.Branch("ch", ch, "ch/F")
-    tree.Branch("tP", tP, "tP/F")
-    tree.Branch("area", area, "area/F")
-    tree.Branch("amp", amp, "amp/F")
-    tree.Branch("width", width, "width/F")
-    tree.Branch("keV", keV, "keV/F")
     # get average pulse time for each event
-    prevEvt = int(0)
-    infile = r.TFile.Open(target, "READ")
-    intree = infile.Get("pulses")
-    entries = []
-    goodEvts =[]
-    evtCount = 0
-    totaltP = 0
+    evt = 0
+    intree = target.Get("pulses")
     for entry in intree:
-        evt=intree.evt
-        if evt != prevEvt:
-            meantP = totaltP/evtCount
-            totaltP = 0
-            evtCount = 0
-            if meantP > t0 and meantP < t1:
-                goodEvts.append(1) #event is good
-            else:
-                goodEvts.append(0)
-        else:
-            totaltP+=intree.tP
-            evtCount+=1
-        prevEvt = int(evt)
-    #get the last entry
-    meantP = totaltP/evtCount
-    if meantP > t0 and meantP < t1:
-        goodEvts.append(1) #event is good
-    else:
-        goodEvts.append(0)
-    totaltP = 0
-    evtCount = 0
-    #loop tree again, selcting good events to be written to the new tree
-#    print ("list of good events: ", goodEvts)
-    prevEvt = int(0)
-    evtIndex = int(0)
-    count = 0
-    for entry in intree:
-        if count%1000==0 and count > 0:
-            print("processing entry: ",count)
-        evt=intree.evt
-        if evt != prevEvt:
-            evtIndex += 1
-            print("new event ", evtIndex)
-        if goodEvts[evtIndex] == 1:
-            intree.GetEntry(count)
-            evtb[0] = (float(intree.evt) )
-     #       nP[0] = (float(intree.nP ))
-            ch[0] = int(intree.ch)
-            #stupid hardcoing for 8125
-            #if val[11] == '795483.43\x0050':
-            #  val[11] ='795483.43'
-    #        print(intree.tP)
-            tP[0]= float(intree.tP)
-            area[0] = float(intree.area)
-            amp[0] = float(intree.amp)
-            width[0] = float(intree.width)
-            keV[0] = float(intree.keV)
-            tree.Fill()
-           # print("filling up my tree")
-        else:
-            intree.GetEntry()
-        prevEvt = evt
-        count+=1
-     #   if count>15000:
-      #      break
-    
-    tree.Print()
-    cleanRun.cd()
-    tree.Write()
-    cleanRun.Close()
-            
-    
-    
+        tP+=intree.tP
+        # if its too early, toss it out
+        
 def getDuplicates(lst):
     unique_rows = set()
     duplicate_rows = []
@@ -283,22 +189,22 @@ def getDuplicates(lst):
     return duplicate_rows, uniques
 
 def combineRuns(lists, runList):
-    for lst in lists:
+    for list in lists:
         #open a new .root file
-        dirpi = lst[0]
-        dirpiNRun = [lst[1][0], dirpi]
+        dirpi = list[0]
+        dirpiNRun = [list[1][0], dirpi]
         for row in reversed(runList):
             if row[-2:] == dirpiNRun:
                 firstRun = row[0]
        # comboRun = r.TFile("Run"+firstRun+"_combined.root", "RECREATE")
     #      mTree = r.TTree("merged","merged")
         cmd ="hadd -f "+dir+"Run"+str(firstRun)+"_combined.root "
-        for drun in lst[1]:
+        for drun in list[1]:
             dirpiNRun = [drun, dirpi]
             for row in reversed(runList):
                 if row[-2:] == dirpiNRun:
                     run = row[0]
-            #run = next(filter(lambda x: tuple(x[-2:]) == dirpiNRun, lst[1]))
+            #run = next(filter(lambda x: tuple(x[-2:]) == dirpiNRun, list[1]))
             print ("found global run:", run ," ", drun, " ",dirpi)
             cmd+=dir+"run"+str(run)+"_pulses.root "
        #     infile = r.TFile(dir +"Run"+str(run)+"_pulses.root", "READ")
@@ -340,7 +246,7 @@ def combineRuns(lists, runList):
     # v vs t colz to check for out of time rf triggers
     #lyso cal included here
     #npulses vs evt/time
-def trimEmptyRuns(runList, remote=False):
+def trimEmptyRuns(runList):
     import paramiko
 
     # SSH connection details
@@ -348,47 +254,38 @@ def trimEmptyRuns(runList, remote=False):
     hostname = 'tau.physics.ucsb.edu'
     port = 22
     username = 'pmfreeman'
-    password = ''
-    if remote:
-        client = paramiko.SSHClient()
-        client.load_system_host_keys()
-            # Automatically add the server's host key (uncomment the line below if necessary)
-            # client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            # Connect to the remote host
-        client.connect(hostname, port, username, password)
+    password = 'sefadfas'
 
-            # Open an SFTP session on the SSH connection
-        sftp = client.open_sftp()
     # Remote directory path
     for row in runList:
         dirpi = str(row[2])
-        run = str(row[0])
+        run = str(row[1])
         remote_directory = '/net/cms26/cms26r0/pmfreeman/XRD/DiRPi_v3/dirpi'+str(dirpi)+'/Run'+str(run)
-        print(remote_directory)
-        command = f"[ -d '{remote_directory}' ] && echo 'Directory exists'"
-        if remote:
-            stdin, stdout, stderr = client.exec_command(command)
-        else:
-            stdin, stdout, stderr = os.system(command)
-        output = stdout.read().decode().strip()
-        # Return True if the directory exists, False otherwise
-        if output == 'Directory exists':
+
+        # Create an SSH client
+        client = paramiko.SSHClient()
+        client.load_system_host_keys()
+
+        # Automatically add the server's host key (uncomment the line below if necessary)
+        # client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        # Connect to the remote host
+        client.connect(hostname, port, username, password)
+
+        # Open an SFTP session on the SSH connection
+        sftp = client.open_sftp()
+
         # List the contents of the remote directory
-            if remote:
-                directory_contents = sftp.listdir(remote_directory)
-            else:
-                directory_contents = os.listdir(remote_directory)
-            # Print the directory contents
-            count=0
-            for item in directory_contents:
-                print(item)
-                count+=1
-                break
-            if count==0:
-                runList.remove(row)
-        else:
-            runList.remove(row)
-            print("removing empty run ",row[0]," from list")
+        directory_contents = sftp.listdir(remote_directory)
+
+        # Print the directory contents
+        count=0
+        for item in directory_contents:
+            print(item)
+            count+=1
+            break
+        if count==0:
+            runLisst.remove(row)
     # Close the SFTP session and the SSH connection
     sftp.close()
     client.close()
@@ -416,7 +313,6 @@ if __name__ == "__main__":
 
   # make .root files for runs in runlist
   count = 0
-  '''
   for run in runList:
     url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run)+"/Run"+str(run)+"_pulses.ant"
     dirpi = runList[2]
@@ -432,18 +328,17 @@ if __name__ == "__main__":
         exceptions.append(run)
     count+=1
   print("the list of exceptions: ",exceptions)
- '''
+  
  
   #combine runs as noted in spreadsheet
   lists = [
  # [264,279],
-  [1, [i for i in range(245, 277)] ],
-  [8, [313,314] ],
-  [8, [300,294,288,282,276,270,264,258,252,246] ],
+  [1, [i for i in range(245, 277)]],
+  [8, [313,314]]
   
   ]
-  combineRuns(lists,runList)
-
+#  combineRuns(lists,runList)
+         
     #clean each remaining run
     #for run in combined runs:
      #   cleanRun(run)
