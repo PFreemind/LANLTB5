@@ -3,6 +3,7 @@ import numpy as np
 from array import array
 import requests
 import os
+import configparser
 
 # scripting to parse and plot david's pulse data from 2022 November Beam Development
 
@@ -134,8 +135,20 @@ def downloadAnt(run, url, dir = './pulse_data/'):
     ant = resp.text
     f = open(dir+"Run"+str(run)+"_pulses.ant","w")
     f.write(ant)
-  
-def getRunList(start = 6800, stop = 6900):
+
+def downloadConfig(run, dirpi, dir = './pulse_data/'):
+    cmsPath = "pmfreeman@tau.physics.ucsb.edu:/net/cms26/cms26r0/pmfreeman/XRD/DiRPi_v3/dirpi"
+    path = cmsPath+str(dirpi)+"/Run"+str(run)+"/config.ini"
+    dest = dir+"Run"+str(run)+"_config.ini"
+    cmd = "scp "+path+" "+dest
+    print(cmd)
+    os.system(cmd)
+    #resp = requests.get(url)
+    #ant = resp.text
+    #f = open(dir+"Run"+str(run)+"_config.ini","w")
+    #f.write(ant)
+
+def getRunList(start = 7000, stop = 21000):
   #get list of dirpi runs
     #    parse it for LANL devices/run numbers:
   urlist = "http://cms2.physics.ucsb.edu/DiRPiRuns"
@@ -143,15 +156,15 @@ def getRunList(start = 6800, stop = 6900):
   txt = resp.text
   lines = txt.split("\n")
   runList =[]
-  exceptions = [7330, 7471, 7495,7502,7522,7525, 7569, 7570, 7667,7673, 7685,7761,7787, 8314 ]
-  #need a run dictionary
+  exceptions = [7330, 7471, 7495,7502,7522,7525, 7569, 7570, 7667,7673, 7685,7761,7787, 8314, 20212,  ]
+  #need a run dictionary
   dictList = []
   for line in lines:
     if line =="": continue
     dirpirun   = int(line.split(" ")[0])
     run   = int(line.split(" ")[1])
     dirpi = int(line.split(" ")[2])
-    if (run>start and run<stop and (dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 or dirpi == 5) and run not in exceptions and not (run>7536 and run<7562) ):
+    if (run>start and run<stop and ( dirpi == 5) and run not in exceptions and not (run>7536 and run<7562) ): #dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 or
       runList.append([run, dirpirun, dirpi])
 #  print (runList)
   #trim empty runs from the list
@@ -162,9 +175,10 @@ def getRunList(start = 6800, stop = 6900):
 def cleanRun(target, t0 = 48000, t1=50000, LYSO=False):
     # make a new tree and file to write to
     cleanRun = r.TFile.Open(target+".clean", "RECREATE")
-    tree = r.TTree("cleaned","cleaned")
+    tree = r.TTree("pulses","pulses")
       
     evtb =  array('f', [0])
+    evtb2 =  array('f', [0])
     tS  =  array('f', [0])
     tE  =  array('f', [0])
     nP  =  array('f', [0])
@@ -182,8 +196,9 @@ def cleanRun(target, t0 = 48000, t1=50000, LYSO=False):
     NPE =  array('f', [0])
     keV =  array('f', [0])
       
- #   tree.Branch("nP", nP, "nP/F")
+    tree.Branch("nP", nP, "nP/F")
     tree.Branch("evt", evtb, "evt/F")
+    tree.Branch("evt2", evtb2, "evt2/F")
     tree.Branch("ch", ch, "ch/F")
     tree.Branch("tP", tP, "tP/F")
     tree.Branch("area", area, "area/F")
@@ -196,14 +211,14 @@ def cleanRun(target, t0 = 48000, t1=50000, LYSO=False):
     intree = infile.Get("pulses")
     entries = []
     goodEvts =[]
-    evtCount = 0
+    evtCount = 1e-10
     totaltP = 0
     for entry in intree:
         evt=intree.evt
         if evt != prevEvt:
             meantP = totaltP/evtCount
             totaltP = 0
-            evtCount = 0
+            evtCount = 1e-10
             if meantP > t0 and meantP < t1:
                 goodEvts.append(1) #event is good
             else:
@@ -235,7 +250,7 @@ def cleanRun(target, t0 = 48000, t1=50000, LYSO=False):
         if goodEvts[evtIndex] == 1:
             intree.GetEntry(count)
             evtb[0] = (float(intree.evt) )
-     #       nP[0] = (float(intree.nP ))
+            evtb2[0] = (float(evtIndex) )                #       nP[0] = (float(intree.nP ))
             ch[0] = int(intree.ch)
             #stupid hardcoing for 8125
             #if val[11] == '795483.43\x0050':
@@ -246,6 +261,7 @@ def cleanRun(target, t0 = 48000, t1=50000, LYSO=False):
             amp[0] = float(intree.amp)
             width[0] = float(intree.width)
             keV[0] = float(intree.keV)
+            nP[0] = float(intree.nP)
             tree.Fill()
            # print("filling up my tree")
         else:
@@ -259,8 +275,6 @@ def cleanRun(target, t0 = 48000, t1=50000, LYSO=False):
     cleanRun.cd()
     tree.Write()
     cleanRun.Close()
-            
-    
     
 def getDuplicates(lst):
     unique_rows = set()
@@ -282,7 +296,8 @@ def getDuplicates(lst):
             uniques.append(row)
     return duplicate_rows, uniques
 
-def combineRuns(lists, runList):
+def combineRuns(lists, runList, memoryDepth=65536):
+    config = configparser.ConfigParser()
     for lst in lists:
         #open a new .root file
         dirpi = lst[0]
@@ -303,8 +318,15 @@ def combineRuns(lists, runList):
                 else:
                     continue
             #run = next(filter(lambda x: tuple(x[-2:]) == dirpiNRun, lst[1]))
-            print ("found global run:", run ," ", drun, " ",dirpi)
-            cmd+=dir+"run"+str(run)+"_pulses.root "
+            file = dir+"Run"+str(run)+"_config.ini"
+            print(file)
+            config.read(file)
+            print(run)
+            depth = int(config["data"]["memory_depth"])
+            print ("memory depth: ", depth)
+            if depth == memoryDepth:
+                print ("found global run:", run ," ", drun, " ",dirpi)
+                cmd+=dir+"run"+str(run)+"_pulses.root "
        #     infile = r.TFile(dir +"Run"+str(run)+"_pulses.root", "READ")
        #     intree = infile.Get("pulses")
        #     tlist.Add(intree)
@@ -312,14 +334,147 @@ def combineRuns(lists, runList):
        # comboRun.Write(tlist)
         os.system(cmd)
   
+def getLYSOCal(templateRun, testRun, keV2ADC = 10):
+#make histograms with fits, find scaling parameter between template and test, get keV calibration from that
+    h1, h2 = getLYSOSpectra(templateRun)
+    h3, h4 = getLYSOSpectra(testRun)
+    minemd1 = compHists(h1, h3)
+    minemd2 = compHists(h2, h4)
+    for alpha in np.linspace(0.5, 2, 0.001):
+        emd1 = compHists(h1, h3, alpha)
+        emd2 = compHists(h2, h4, alpha)
+        if emd1 < minemd1:
+            minemd1 = emd1
+            minAlpha1 = alpha
+        if emd2 < minemd2:
+            minemd2 = emd2
+            minAlpha2 = alpha
+    #also want to plot histograms
+    #get keV/ADC value
+    keV = keV2ADC / alpha
+    return minAlpha1, minAlpha2, keVADC
+    
+def compHists(h1, h2, alpha = 1.0):
+    sum = 0
+    nBins = h1.GetNbinsX()
+    nBins2 = h2.GetNbinsX()
+    #scaling for number of entries
+    h1.Scale(float(1./h1.GetEntries() ) )
+    h2.Scale(float(1./h2.GetEntries() ) )
+
+    if nBins != nBins2:
+      print("Histograms have different numbers of bins! Exiting...")
+      return -999
+      
+    for i in range(nBins):
+      x1 = h1.GetBinContent(i)* alpha
+      x2 =  h2.GetBinContent(i)
+      diff = x1 - x2
+      if x1+x2==0:continue
+      sum = sum + pow(diff*diff,0.5)/(x1+x2)
+    return sum
+
+def getTemplateSpect():
+    file = r.TFile.Open(templateRun, "READ")
+    t = file.Get("pulses")
+    #fill histogram for template
+    c = r.TCanvas()
+    i = -1
+    i2 = 0
+    h1 = r.TH1F("h",";Pulse amplitude [ADC]; Scaled counts", 256, 0, 255)
+    h2 = r.TH1F("h",";Pulse amplitude [ADC]; Scaled counts", 256, 0, 255)
+    for entry in t: #while(true)
+        i += 1
+        i2 = i+1
+        if t.nPulses == 2:
+            t.GetEntry(i)
+            amp1 = t.amp
+            ch1= t.ch
+            t.GetEntry(i2)
+            amp2 = t.amp
+            ch2 = t.ch
+            if amp1 >thresh and amp2 > thresh and ch1 ==1 and ch2 ==2:
+                #yay looks like a good calibration event
+                h1.Fill("amp1")
+                h2.Fill("amp2")
+    return h1, h2
+#ok, those are the template spectra
+#now get the same spectra from the run of interest
+
+
 #def getLYSOCal(defaultRun, testRun):
 #make histograms with fits, find scaling parameter between template and test, get keV calibration from that
 
-#def plotting():
-    #plotting for all runs
+def makePlots(run, dir = "./plots", tick = 50. / 1000.):
+    #open the .root file, get tree
+    f = r.TFile.Open(run,"READ")
+    t = f.Get("pulses")
+
+    entries = t.GetEntries()
+    t.GetEntry(entries-1)
+    nEvt = t.evt2
+    prefix = str(run).split("/")[-1].split(".")[0]
+    runX = prefix.split("_")[0]
+    os.system("mkdir "+str(dir)+"/"+str(runX))
+    plotDir = str(dir)+"/"+str(runX)+"/"
+    print("the prefix is ", prefix )
     # v vs t colz to check for out of time rf triggers
+    hT = r.TH1F("hT", ";pulse time [us];", 200, 0, 100 )
+    h1 =  r.TH1F("h1", ";pulse amp [ADC];", 256, 0 , 255 )
+    h2 =  r.TH1F("h2", ";pulse amp [ADC];", 256, 0 , 255 )
+    hevt =  r.TH1F("hevt", ";event;", 100, 0, nEvt)
+    htPevt =  r.TH2F("htPevt", "; event;", 100, 0 , nEvt, 200, 0 , 100, )
+    h1evt =  r.TH2F("h1evt", ";Event;Ch1 Pulse Amplitude [ADC]", 100, 0 , nEvt, 256, 0 , 255 )
+    h2evt =  r.TH2F("hwevt", ";Event;Ch2 Pulse Amplitude [ADC]", 100, 0 , nEvt, 256, 0 , 255 )
+
+    netEvt = 0
+    prevEvt = 0
+    for entry in t:
+        tP =t.tP * tick
+        evt=t.evt
+        evt2=t.evt2
+      #  evt = t.evt2
+        amp = t.amp
+        ch = t.ch
+        hT.Fill(tP)
+        if ch ==1:
+            h1.Fill(amp)
+            h1evt.Fill(evt2, amp)
+        if ch ==2:
+            h2.Fill(amp)
+            h2evt.Fill(evt2, amp)
+        hevt.Fill(evt2)
+        htPevt.Fill(evt2, tP)
+        #if number of pulses is 1, do LYSO stuff
+        
+    can = r.TCanvas()
+    hT.Draw()
+    savePlots(can, plotDir, prefix+"_tP")
+    h1.Draw()
+    savePlots(can, plotDir, prefix+"_amp1")
+    h2.Draw()
+    savePlots(can, plotDir, prefix+"_amp2")
+    htPevt.Draw("colz")
+    savePlots(can, plotDir, prefix+"_tPevt")
+    hevt.Draw()
+    savePlots(can, plotDir, prefix+"_evt")
+    h1evt.Draw("colz")
+    savePlots(can, plotDir, prefix+"_amp1evt")
+ #   t.Draw("amp:evt2>>h2(200)","","colz")
+ #   can.Update()
+ #   can.SaveAs(plotDir+"/"+prefix+"_ampevt")
+    
     #lyso cal included here
     #npulses vs evt/time
+def savePlots(canvas, plotDir, prefix):
+    canvas.SaveAs(plotDir+"/"+prefix+".png")
+    canvas.SaveAs(plotDir+"/"+prefix+".pdf")
+    canvas.SaveAs(plotDir+"/"+prefix+".C")
+    return 0
+
+
+
+
 def trimEmptyRuns(runList, remote=False):
     import paramiko
 
@@ -380,7 +535,7 @@ if __name__ == "__main__":
   dir = './pulse_data/'
   exceptions = []
  # f = open("DiRPiRuns.txt","w")
-  runList = getRunList()
+  runList = getRunList(20000, 21000)
   #print ("runlist: ")
 #  print(runList)
   dictList = []
@@ -396,12 +551,13 @@ if __name__ == "__main__":
   runList = uniques
   # make .root files for runs in runlist
   count = 0
-  
+  '''
   for run in runList:
     url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run[0])+"/Run"+str(run[0])+"_pulses.ant"
-    dirpi = runList[2]
+    dirpi = str(run[2])
     try:
         downloadAnt(str(run[0]), url, dir)
+        downloadConfig(str(run[0]), dirpi, dir)
         file = dir +'Run'+str(run[0])+'_pulses.ant'
         rfile = dir +'Run'+str(run[0])+'_pulses.root'
         output = dir +'Run'+str(run[0])+'_pulses.root'
@@ -414,20 +570,34 @@ if __name__ == "__main__":
     count+=1
   print("the list of exceptions: ",exceptions)
  
+ '''
  
   #combine runs as noted in spreadsheet
+  '''
   runLists = [
+ # [264,279],
+  [1, [i for i in range(245, 277)] ],
+  [8, [313,314] ],
+  [8, [300,294,288,282,276,270,264,258,252,246] ],
+  #  [5, [i for i in range(50, 59)] ]
+  ]
+  
+#  combineRuns(runLists,runList)
+      #clean the RF runs
+    #for run in combined runs:
+     #   cleanRun(run)
+  '''
+  runListsCrocker = [
  # [264,279],
 #  [1, [i for i in range(245, 277)] ],
 #  [8, [313,314] ],
 #  [8, [300,294,288,282,276,270,264,258,252,246] ],
-    [5, [i for i in range(50, 59)] ]
+    [5, [i for i in range(297, 316)] ]
   ]
-  combineRuns(runLists,runList)
-
-    #clean each remaining run
-    #for run in combined runs:
-     #   cleanRun(run)
+  combineRuns(runListsCrocker,runList, 4096)
+#  for run in
+  cleanRun(run, -10000, 10000)
+ #now make the plots
     
 
    # lines =ant.split("\n")
