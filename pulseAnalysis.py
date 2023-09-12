@@ -4,6 +4,7 @@ from array import array
 import requests
 import os
 import configparser
+import math
 
 # scripting to parse and plot david's pulse data from 2022 November Beam Development
 
@@ -26,11 +27,79 @@ import configparser
 #16 = area of the pulse calibrated to number of photoelectrons
 #17 = area of the pulse calibrated in keV
 
+
+'''
+// Definition of variables in the dirpipulses ant file
+antdef n 30 // Number of columns per line
+// Event wide information
+antdef run 1 // Run number
+antdef evt 2 // Event number within
+antdef tInRun 3 // Time since start of run in seconds
+antdef tBetweenEvents 4 // Time since previous event in seconds
+antdef nPulses 5 // Number of pulses in event summed over both channels
+antdef nCh1Pulses 6 // Number of pulses in channel 1
+antdef nCh2Pulses 7 // Number of pulses in channel 2
+antdef RMS1 8 // RMS for channel 1
+antdef RMS2 9 // RMS for channel 2
+antdef Ped1 10 // Pedestal for channel 1 (subtracted before pulse finding)
+antdef Ped2 11 // Pedestal for channel 2 (subtracted before pulse finding)
+// The following are the sum of all pulses in different time windows.
+// Region a is well before the trigger, b is before the trigger window
+// Region c is after the trigger, and d is well after the trigger.
+// The specific time windows will be adjusted based on run type,
+// but the intent for LANL is a=preRF, b=RF, c=beam, d=post-beam
+// These are not yet implimented and for now just 0
+antdef Area1a 12 // Total CH1 area in waveform for time region a
+antdef Area1b 13 // Total CH1 area in waveform for time region b
+antdef Area1c 14 // Total CH1 area in waveform for time region c
+antdef Area1d 15 // Total CH1 area in waveform for time region d
+antdef Area2a 16 // Total CH2 area in waveform for time region a
+antdef Area2b 17 // Total CH2 area in waveform for time region b
+antdef Area2c 18 // Total CH2 area in waveform for time region c
+antdef Area2d 19 // Total CH2 area in waveform for time region d
+// Pulse specific information
+antdef chan 20 // Channel number for pulse (1 or 2)
+antdef ipulse 21 // number of pulse within waveform for this particular channel
+antdef t 22 // Time of pulse (in address units)
+antdef A 23 // Area of pulse (in ADCxAddress units)
+antdef V 24 // Height of pulse (in ADC counts)
+antdef width 25 // Width of pulse (in Address units)
+antdef E 26 // Calibrated energy of pulse (in keV)
+antdef dt 27 // Time to nearest other pulse in the channel (65536=none)
+antdef dtOther 28 // Time to nearest pulse in other channel (65536=none)
+antdef coinc 29 // Flag=1 if coincident |dtOther|<4, 0 if not
+antdef qual 30 // Pulse quality flag, 0=good
+// The quality flag is based on compatibility of V vs A and width vs A.
+// The quality flag is not yet implimented and for now just 0.
+'''
+
+colors=[
+r.kOrange+2,
+r.kRed+1,
+r.kGreen+2,
+r.kCyan-2,
+r.kBlue,
+r.kGreen,
+r.kBlack,
+r.kMagenta+1,
+r.kGray+1,
+r.kSpring-7,
+r.kGreen-10,
+r.kGreen-8,
+r.kGreen-8,
+r.kGreen-6,
+r.kGreen-5,
+r.kGreen,
+r.kGreen+1,
+r.kGreen+2,
+r.kGreen+3,
+r.kGreen+4,
+r.kOrange+1,
+]
 # read ntpule into root trees, to be used for histogram and other plotting
 def makeTree(input, output):
   out = r.TFile(output,"RECREATE")
   t = r.TTree("pulses", "pulses")
-  
   evt =  array('f', [0])
   tS  =  array('f', [0])
   tE  =  array('f', [0])
@@ -44,39 +113,75 @@ def makeTree(input, output):
   pC  =  array('f', [0])
   tP  =  array('f', [0])
   area=  array('f', [0])
+  area1a=  array('f', [0])
+  area1b=  array('f', [0])
+  area2a=  array('f', [0])
+  area2b=  array('f', [0])
+  area1c=  array('f', [0])
+  area2c=  array('f', [0])
   amp =  array('f', [0])
   width= array('f', [0])
   NPE =  array('f', [0])
   keV =  array('f', [0])
+  coinc =  array('f', [0])
+  tin =  array('f', [0])
+  dt =  array('f', [0])
+  dtO =  array('f', [0])
+  
+  
   
   t.Branch("nP", nP, "nP/F")
   t.Branch("evt", evt, "evt/F")
   t.Branch("ch", ch, "ch/F")
   t.Branch("tP", tP, "tP/F")
   t.Branch("area", area, "area/F")
+  t.Branch("area1a", area, "area1a/F")
+  t.Branch("area1b", area, "area2a/F")
+  t.Branch("area2a", area, "area1b/F")
+  t.Branch("area2b", area, "area2b/F")
+  t.Branch("area1c", area, "area1c/F")
+  t.Branch("area2c", area, "area2c/F")
   t.Branch("amp", amp, "amp/F")
   t.Branch("width", width, "width/F")
   t.Branch("keV", keV, "keV/F")
+  t.Branch("n1", n1, "n1/F")
+  t.Branch("n2", n2, "n2/F")
+  t.Branch("coinc", n2, "coinc/F")
+  t.Branch("tin", tin, "tin/F")
+  t.Branch("dt", dt, "dt/F")
+  t.Branch("dtO", dtO, "dtO/F")
 
   f = open (input,  'r')
   lines = f.readlines()
   count = 0
   for line in lines:
     val = line.split(' ')
-  #  print(type(val[0]), val[0])
+   # print(type(val[0]), val[0])
   #  print(count)
   #  print(val)
-    evt[0] = (float(val[0]) )
-    nP[0] = (float(val[3]) )
-    ch[0] = int(val[9])
+    evt[0] = (float(val[1]) )
+    nP[0] = (float(val[4]) )
+    n1[0] = (float(val[5]) )
+    n2[0] = (float(val[6]) )
+    ch[0] = int(val[19])
     #stupid hardcoing for 8125
     #if val[11] == '795483.43\x0050':
     #  val[11] ='795483.43'
-    tP[0]= float(val[11])
-    area[0] = float(val[12])
-    amp[0] = float(val[13])
-    width[0] = float(val[14])
-    keV[0] = float(val[16])
+    tP[0]= float(val[21])
+    area[0] = float(val[22])
+    area1a[0] = float(val[12])
+    area2a[0] = float(val[16])
+    area1b[0] = float(val[13])
+    area2b[0] = float(val[17])
+    area1c[0] = float(val[14])
+    area2c[0] = float(val[18])
+    amp[0] = float(val[23])
+    width[0] = float(val[24])
+    keV[0] = float(val[25])
+    coinc[0] = float(val[28])
+    dt[0] = float(val[26])
+    dtO[0] = float(val[27])
+    tin[0] = float(val[2])
   #  print("evt= "+str(evt[0])+" ch= "+str(ch[0])+", amp = "+str(amp[0]))
    # print("evt= "+str(float(val[0]))+" ch= "+str(float(val[9]))+", amp = "+str(amp[0]))
     t.Fill()
@@ -94,7 +199,6 @@ def turnOn(input):
   f = r.TFile(input,"READ")
   t = r.Get("pulses")
   #for entry in t:
-    
     
 def countPulses(file):
   f = r.TFile(file)
@@ -133,7 +237,8 @@ def countPulses(file):
 def downloadAnt(run, url, dir = './pulse_data/'):
     resp = requests.get(url)
     ant = resp.text
-    f = open(dir+"Run"+str(run)+"_pulses.ant","w")
+    #f = open(dir+"Run"+str(run)+"_pulses.ant","w")
+    f = open(dir+"Run"+str(run)+"_dirpipulses.ant","w")
     f.write(ant)
 
 def downloadConfig(run, dirpi, dir = './pulse_data/'):
@@ -148,7 +253,7 @@ def downloadConfig(run, dirpi, dir = './pulse_data/'):
     #f = open(dir+"Run"+str(run)+"_config.ini","w")
     #f.write(ant)
 
-def getRunList(start = 7000, stop = 21000):
+def getRunList(start = 7000, stop = 22000):
   #get list of dirpi runs
     #    parse it for LANL devices/run numbers:
   urlist = "http://cms2.physics.ucsb.edu/DiRPiRuns"
@@ -164,7 +269,7 @@ def getRunList(start = 7000, stop = 21000):
     dirpirun   = int(line.split(" ")[0])
     run   = int(line.split(" ")[1])
     dirpi = int(line.split(" ")[2])
-    if (run>start and run<stop and ( dirpi == 5) and run not in exceptions and not (run>7536 and run<7562) ): #dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 or
+    if (run>=start and run<=stop and ( dirpi == 12 or dirpi == 5 or dirpi == 13 ) and run not in exceptions and not (run>7536 and run<7562) ): #dirpi == 1 or dirpi == 7 or dirpi == 8 or dirpi == 9 or
       runList.append([run, dirpirun, dirpi])
 #  print (runList)
   #trim empty runs from the list
@@ -195,7 +300,11 @@ def cleanRun(target, t0 = 48000, t1=50000, LYSO=False):
     width= array('f', [0])
     NPE =  array('f', [0])
     keV =  array('f', [0])
-      
+    coinc =  array('f', [0])
+    tin =  array('f', [0])
+    dt =  array('f', [0])
+    dtO =  array('f', [0])
+
     tree.Branch("nP", nP, "nP/F")
     tree.Branch("evt", evtb, "evt/F")
     tree.Branch("evt2", evtb2, "evt2/F")
@@ -205,6 +314,10 @@ def cleanRun(target, t0 = 48000, t1=50000, LYSO=False):
     tree.Branch("amp", amp, "amp/F")
     tree.Branch("width", width, "width/F")
     tree.Branch("keV", keV, "keV/F")
+    tree.Branch("coinc", n2, "coinc/F")
+    tree.Branch("tin", tin, "tin/F")
+    tree.Branch("dt", dt, "dt/F")
+    tree.Branch("dtO", dtO, "dtO/F")
     # get average pulse time for each event
     prevEvt = int(0)
     infile = r.TFile.Open(target, "READ")
@@ -412,7 +525,8 @@ def makePlots(run, dir = "./plots", tick = 50. / 1000.):
 
     entries = t.GetEntries()
     t.GetEntry(entries-1)
-    nEvt = t.evt2
+    nEvt = t.evt
+    duration = t.tin
     prefix = str(run).split("/")[-1].split(".")[0]
     runX = prefix.split("_")[0]
     os.system("mkdir "+str(dir)+"/"+str(runX))
@@ -426,27 +540,60 @@ def makePlots(run, dir = "./plots", tick = 50. / 1000.):
     htPevt =  r.TH2F("htPevt", "; event;", 100, 0 , nEvt, 200, 0 , 100, )
     h1evt =  r.TH2F("h1evt", ";Event;Ch1 Pulse Amplitude [ADC]", 100, 0 , nEvt, 256, 0 , 255 )
     h2evt =  r.TH2F("hwevt", ";Event;Ch2 Pulse Amplitude [ADC]", 100, 0 , nEvt, 256, 0 , 255 )
-
+    hkeV = r.TH1F("hkeV", ";Energy (keV);", 100, 50,2000)
+    hkeVhi = r.TH1F("hkeVhi", ";Energy (keV);", 100, 100,2000)
+    hLYSO =  r.TH1F("hLYSO", ";Area (nV*S);", 200, 0,4e3)
+    htin =  r.TH1F("htin", ";t[s];", 200, 0, duration)
+    l=[]
+    nbins=200
+    #for i in range(10):
+     #   l.append( r.TH1F("ht"+str(i)+"00", ";t[s];", 100, 0, duration) )
+    l.append( r.TH1F("ht100", ";t[s];", nbins, 0, duration) )
+    l.append( r.TH1F("ht200", ";t[s];", nbins, 0, duration) )
+    l.append( r.TH1F("ht300", ";t[s];", nbins, 0, duration) )
+    l.append( r.TH1F("ht400", ";t[s];", nbins, 0, duration) )
+    l.append( r.TH1F("ht500", ";t[s];", nbins, 0, duration) )
+    l.append( r.TH1F("ht600", ";t[s];", nbins, 0, duration) )
+    l.append( r.TH1F("ht700", ";t[s];", nbins, 0, duration) )
+    l.append( r.TH1F("ht800", ";t[s];", nbins, 0, duration) )
+    l.append( r.TH1F("ht900", ";t[s];", nbins, 0, duration) )
+    l.append( r.TH1F("ht1000", ";t[s];", nbins, 0, duration) )
+    print("list appended")
     netEvt = 0
     prevEvt = 0
     for entry in t:
         tP =t.tP * tick
         evt=t.evt
-        evt2=t.evt2
+        evt2=t.evt
+        tin=t.tin
       #  evt = t.evt2
         amp = t.amp
         ch = t.ch
+        keV = t.keV
+        coinc = t.coinc
         hT.Fill(tP)
-        if ch ==1:
-            h1.Fill(amp)
-            h1evt.Fill(evt2, amp)
+        area = t.area
+        if ch == 1:
+            if coinc == 0:
+                h1.Fill(amp)
+                h1evt.Fill(evt2, amp)
+                hkeV.Fill(keV)
+                energy = math.floor(keV/200)
+                htin.Fill(tin)
+                if energy>9:
+                    energy=9
+                l[energy].Fill(tin)
+                if keV > 1400 and keV < 2000:
+                    hkeVhi.Fill(keV)
+            if coinc == 1:
+             hLYSO.Fill(area)
         if ch ==2:
             h2.Fill(amp)
             h2evt.Fill(evt2, amp)
         hevt.Fill(evt2)
         htPevt.Fill(evt2, tP)
         #if number of pulses is 1, do LYSO stuff
-        
+    print("loop finished")
     can = r.TCanvas()
     hT.Draw()
     savePlots(can, plotDir, prefix+"_tP")
@@ -460,6 +607,48 @@ def makePlots(run, dir = "./plots", tick = 50. / 1000.):
     savePlots(can, plotDir, prefix+"_evt")
     h1evt.Draw("colz")
     savePlots(can, plotDir, prefix+"_amp1evt")
+    
+    #fitting for 480 keV peak
+    r.gStyle.SetOptFit(1)
+    f2 = r.TF1("f2","gaus(0)+expo(3)", 350, 600 )
+    f2.SetParLimits(0,1000, 8000)
+    f2.SetParLimits(1,460, 500)
+    f2.SetParLimits(2,10, 100)
+    f2.SetRange(350, 700)
+    hkeV.Fit("f2", "R")
+    hkeV.GetXaxis().SetTitle("Energy (keV)")
+    savePlots(can, plotDir, prefix+"_keV1")
+    
+    r.gStyle.SetOptStat(1)
+    hkeVhi.Draw()
+    savePlots(can, plotDir, prefix+"_keV1hi")
+    
+    r.gStyle.SetOptStat(1)
+    hLYSO.Draw()
+    savePlots(can, plotDir, prefix+"_LYSO")
+    
+    htin.Draw()
+    can.SetLogy(1)
+    can.SaveAs(plotDir+prefix+"_tin.png")
+    can.SaveAs(plotDir+prefix+"_tin.pdf")
+    can.SaveAs(plotDir+prefix+"_tin.C")
+  #  can.SetLogy(0)
+    #savePlots(can, prefix, prefix+"_tin")
+    leg = r.TLegend(0.6, 0.35, 0.85, 0.85 )
+    for i in range(10):
+        l[i].Draw("")
+        savePlots(can, plotDir, prefix+"_tin_"+str( (i+1) *2 )+"00keV")
+
+    for i in range(10):
+        l[i].SetLineColor(colors[i])
+        l[i].SetMinimum(1)
+        leg.AddEntry(l[i], str((i+1)*200)+" keV")
+        if i ==0:
+            l[i].Draw("")
+        else:
+            l[i].Draw("same")
+    leg.Draw()
+    savePlots(can, plotDir, prefix+"_tin_"+"summary")
  #   t.Draw("amp:evt2>>h2(200)","","colz")
  #   can.Update()
  #   can.SaveAs(plotDir+"/"+prefix+"_ampevt")
@@ -471,9 +660,6 @@ def savePlots(canvas, plotDir, prefix):
     canvas.SaveAs(plotDir+"/"+prefix+".pdf")
     canvas.SaveAs(plotDir+"/"+prefix+".C")
     return 0
-
-
-
 
 def trimEmptyRuns(runList, remote=False):
     import paramiko
@@ -535,7 +721,7 @@ if __name__ == "__main__":
   dir = './pulse_data/'
   exceptions = []
  # f = open("DiRPiRuns.txt","w")
-  runList = getRunList(20000, 21000)
+  runList = getRunList(33360, 40000)
   #print ("runlist: ")
 #  print(runList)
   dictList = []
@@ -551,26 +737,29 @@ if __name__ == "__main__":
   runList = uniques
   # make .root files for runs in runlist
   count = 0
-  '''
+  
   for run in runList:
-    url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run[0])+"/Run"+str(run[0])+"_pulses.ant"
+    url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run[0])+"/Run"+str(run[0])+"_dirpipulses.ant"
     dirpi = str(run[2])
     try:
-        downloadAnt(str(run[0]), url, dir)
-        downloadConfig(str(run[0]), dirpi, dir)
-        file = dir +'Run'+str(run[0])+'_pulses.ant'
-        rfile = dir +'Run'+str(run[0])+'_pulses.root'
-        output = dir +'Run'+str(run[0])+'_pulses.root'
-        makeTree(file, output)
-     #   countPulses(rfile)/plots/230703225358_68513.gif
+     #   downloadAnt(str(run[0]), url, dir)
+      #  downloadConfig(str(run[0]), dirpi, dir)
+        file = dir +'Run'+str(run[0])+'_dirpipulses.ant'
+        rfile = dir +'Run'+str(run[0])+'_dirpipulses.root'
+        output = dir +'Run'+str(run[0])+'_dirpipulses.root'
+       # makeTree(file, output)
+        makePlots(output)
+        # countPulses(rfile)/plots/230703225358_68513.gif
     except:
         print("skipping run "+ str(run[0]))
         print (url)
         exceptions.append(run)
     count+=1
+   # cleanRun(output, -10000, 70000)
+    
   print("the list of exceptions: ",exceptions)
  
- '''
+ 
  
   #combine runs as noted in spreadsheet
   '''
@@ -586,7 +775,7 @@ if __name__ == "__main__":
       #clean the RF runs
     #for run in combined runs:
      #   cleanRun(run)
-  '''
+  
   runListsCrocker = [
  # [264,279],
 #  [1, [i for i in range(245, 277)] ],
@@ -599,7 +788,7 @@ if __name__ == "__main__":
   cleanRun(run, -10000, 10000)
  #now make the plots
     
-
+'''
    # lines =ant.split("\n")
     #parsed = []
     #for line in lines:
@@ -607,3 +796,31 @@ if __name__ == "__main__":
     #    parsed.append(line)
    
 
+
+
+'''
+#fitting routine:
+
+pulses->Draw("keV>>h2(100, 100, 2000)","ch==1")
+auto f2 = new TF1("f2","gaus(0)+expo(3)", 350, 700 )
+f2->SetParLimits(0,50, 1000)
+f2->SetParLimits(1,460, 500)
+f2->SetParLimits(2,10, 100)
+f2->SetRange(300, 700)
+h2->Fit("f2", "R")
+h2->GetXaxis()->SetTitle("Energy (keV)")
+
+
+
+
+pulses->Draw("keV:evt>>h2(100, 0, 55e3, 50, 0, 1500","ch==1","colz")
+h2->SetTitle("Beam Pulses")
+h2->GetXaxis()->SetTitle("Event")
+h2->GetYaxis()->SetTitle("Energy (keV)")
+
+'''
+
+def getNbeam(){
+
+
+}
