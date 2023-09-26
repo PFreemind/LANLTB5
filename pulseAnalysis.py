@@ -5,6 +5,7 @@ import requests
 import os
 import configparser
 import math
+import csv
 
 # scripting to parse and plot david's pulse data from 2022 November Beam Development
 
@@ -127,7 +128,8 @@ def makeTree(input, output):
   tin =  array('f', [0])
   dt =  array('f', [0])
   dtO =  array('f', [0])
-  
+  iPulse =  array('f', [0])
+
   
   
   t.Branch("nP", nP, "nP/F")
@@ -135,12 +137,12 @@ def makeTree(input, output):
   t.Branch("ch", ch, "ch/F")
   t.Branch("tP", tP, "tP/F")
   t.Branch("area", area, "area/F")
-  t.Branch("area1a", area, "area1a/F")
-  t.Branch("area1b", area, "area2a/F")
-  t.Branch("area2a", area, "area1b/F")
-  t.Branch("area2b", area, "area2b/F")
-  t.Branch("area1c", area, "area1c/F")
-  t.Branch("area2c", area, "area2c/F")
+  t.Branch("area1a", area1a, "area1a/F")
+  t.Branch("area1b", area1b, "area1b/F")
+  t.Branch("area2a", area2a, "area2a/F")
+  t.Branch("area2b", area2b, "area2b/F")
+  t.Branch("area1c", area1c, "area1c/F")
+  t.Branch("area2c", area2c, "area2c/F")
   t.Branch("amp", amp, "amp/F")
   t.Branch("width", width, "width/F")
   t.Branch("keV", keV, "keV/F")
@@ -150,6 +152,7 @@ def makeTree(input, output):
   t.Branch("tin", tin, "tin/F")
   t.Branch("dt", dt, "dt/F")
   t.Branch("dtO", dtO, "dtO/F")
+  t.Branch("iPulse", iPulse, "iPulse/F")
 
   f = open (input,  'r')
   lines = f.readlines()
@@ -169,12 +172,12 @@ def makeTree(input, output):
     #  val[11] ='795483.43'
     tP[0]= float(val[21])
     area[0] = float(val[22])
-    area1a[0] = float(val[12])
-    area2a[0] = float(val[16])
-    area1b[0] = float(val[13])
-    area2b[0] = float(val[17])
-    area1c[0] = float(val[14])
-    area2c[0] = float(val[18])
+    area1a[0] = float(val[11])
+    area2a[0] = float(val[15])
+    area1b[0] = float(val[12])
+    area2b[0] = float(val[16])
+    area1c[0] = float(val[13])
+    area2c[0] = float(val[17])
     amp[0] = float(val[23])
     width[0] = float(val[24])
     keV[0] = float(val[25])
@@ -182,6 +185,7 @@ def makeTree(input, output):
     dt[0] = float(val[26])
     dtO[0] = float(val[27])
     tin[0] = float(val[2])
+    iPulse[0] = float(val[20])
   #  print("evt= "+str(evt[0])+" ch= "+str(ch[0])+", amp = "+str(amp[0]))
    # print("evt= "+str(float(val[0]))+" ch= "+str(float(val[9]))+", amp = "+str(amp[0]))
     t.Fill()
@@ -721,7 +725,7 @@ if __name__ == "__main__":
   dir = './pulse_data/'
   exceptions = []
  # f = open("DiRPiRuns.txt","w")
-  runList = getRunList(33360, 40000)
+  runList = getRunList(33677, 33737)
   #print ("runlist: ")
 #  print(runList)
   dictList = []
@@ -742,12 +746,12 @@ if __name__ == "__main__":
     url = "http://cms2.physics.ucsb.edu/DRS/Run"+str(run[0])+"/Run"+str(run[0])+"_dirpipulses.ant"
     dirpi = str(run[2])
     try:
-     #   downloadAnt(str(run[0]), url, dir)
-      #  downloadConfig(str(run[0]), dirpi, dir)
+        downloadAnt(str(run[0]), url, dir)
+        downloadConfig(str(run[0]), dirpi, dir)
         file = dir +'Run'+str(run[0])+'_dirpipulses.ant'
         rfile = dir +'Run'+str(run[0])+'_dirpipulses.root'
         output = dir +'Run'+str(run[0])+'_dirpipulses.root'
-       # makeTree(file, output)
+        makeTree(file, output)
         makePlots(output)
         # countPulses(rfile)/plots/230703225358_68513.gif
     except:
@@ -819,8 +823,135 @@ h2->GetXaxis()->SetTitle("Event")
 h2->GetYaxis()->SetTitle("Energy (keV)")
 
 '''
+'''
+def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1800):
+    dir = "./pulse_data/"
+    file =r.TFile.Open(dir+run+"_dirpipulses.root","READ")
+    t=file.Get("pulses")
+    h = r.TH1F("h",";Pulse energy (keV); Counts", 256, 0, 2500)
+    hE = r.TH1F("hE",";Pulse energy (keV); Counts", 256, 0, 2500)
+    hPE = r.TH1F("hPE",";Pulse energy (keV); Counts", 256, 0, 2500)
+    hP = r.TH1F("hP",";Pulse energy (keV); Counts", 256, 0, 2500)
+    
+    evts = []
+    nEvt = 0
+    for e in t:
+        evt=t.evt
+        tin=t.tin
+        tP=t.tP
+        #  evt = t.evt2
+        amp = t.amp
+        ch = t.ch
+        keV = t.keV
+        coinc = t.coinc
+        area = t.area
+        area1a = t.area1a
+        area1b = t.area1b
+        if evt>=start and evt <= stop and ch == 1 and tP > 500 and tP < 3000:
+           # print (keV)
+            h.Fill(keV)
+            if area1a < 3000 and area1b < 3000:
+                hP.Fill(keV)
+                if evt not in evts:
+                    evts.append(evt)
+                    nEvt += 1
+            if keV> energyCut:
+                hE.Fill(keV)
+                if area1a < 3000 and area1b < 3000:
+                    hPE.Fill(keV)
+    can = r.TCanvas()
+    h.Draw()
+    savePlots(can, "./plots/"+run, "pulseCount_evt_"+str(stop))
+    #tell me how many pulses there were
+    nPulses = h.GetEntries()
+    
+  #  print("oh boy there are a bunch of pulses: ",nPulses )
+#    input("")
+    
+    #write things to .txt/csv
+    # field names
+    fields = ["cut","start", "stop", "counts", "nEvts"]
+        
+    # data rows of csv file
+    rows = [ ["none", start, stop, h.GetEntries(), stop-start+1 ],
+        ["largeEarlyPulses", start, stop, hP.GetEntries(), nEvt ],
+        ["energy", start, stop, hE.GetEntries(), stop-start+1 ],
+        ["both", start, stop, hPE.GetEntries(), nEvt  ] ]
+    # name of csv file
+    filename = "beamCounting_evt_"+str(stop)+".csv"
+    # writing to csv file
+    with open(filename, 'w') as csvfile:
+        # creating a csv writer object
+        csvwriter = csv.writer(csvfile)
+            
+        # writing the fields
+        csvwriter.writerow(fields)
+            
+        # writing the data rows
+        csvwriter.writerows(rows)
+    print(fields)
+    for row in rows:
+        print(row)
+    return rows
+'''
+'''
+pairs = [
+[12000, 16000], #0.5nA background
+[17000, 21500], #0.5 nA
+[22000, 24000],
+[26000, 33000],
+[33700, 38200], #1.0 nA
+[39000, 48000],
+[51200, 56000], #1.5 nA
+[56500, 64500],
+[68400, 73000], # 2 nA
+[77000, 87000],
+[94000, 97500], #3 nA
+[99000, 108000], #3 nA after
+]
+'''
+'''
+#for run 33361, with dirpi13
+pairs = [
+[13500 , 14500], #0.5nA background
+[14800 , 16000], #0.5 nA
+[17200 , 19400],
+[19700 , 20900],#1.0 nA
+[21100 , 24000],
+[24800 , 26100],#1.5 nA
+[32300 , 35200],
+[29500 , 31000],# 2 nA
+[32300 , 35200],
+[37000, 38600], #3 nA
+[39000, 41500], #3 nA after
+]
 
-def getNbeam(){
+#dirpi5, Run33478
+pairs = [
+[88000 , 100000],
+[105000, 240000],
+[250000, 400000],
+]
 
+run="Run33478"
+filename="pulseCounting"+run+".csv"
+with open(filename, 'w') as csvfile:
+        # creating a csv writer object
+        csvwriter = csv.writer(csvfile)
+            
+        for pair in pairs:
+            start = pair[0]
+            stop = pair[1]
+            rows = getNbeam(start,stop, run)
+            
+        # writing the data rows
+            csvwriter.writerows(rows)
 
-}
+    
+ #   getNbeam(start,stop, run = "Run33361")
+
+    #need to add event counting
+
+    # ok, need cuts and lit iteration
+    #chat cuts
+'''
