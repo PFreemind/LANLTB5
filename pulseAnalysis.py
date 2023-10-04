@@ -129,8 +129,7 @@ def makeTree(input, output):
   dt =  array('f', [0])
   dtO =  array('f', [0])
   iPulse =  array('f', [0])
-
-  
+  tBetweenEvents =  array('f', [0])
   
   t.Branch("nP", nP, "nP/F")
   t.Branch("evt", evt, "evt/F")
@@ -153,6 +152,7 @@ def makeTree(input, output):
   t.Branch("dt", dt, "dt/F")
   t.Branch("dtO", dtO, "dtO/F")
   t.Branch("iPulse", iPulse, "iPulse/F")
+  t.Branch("tBetweenEvents", tBetweenEvents, "tBetweenEvents/F")
 
   f = open (input,  'r')
   lines = f.readlines()
@@ -163,6 +163,7 @@ def makeTree(input, output):
   #  print(count)
   #  print(val)
     evt[0] = (float(val[1]) )
+    tBetweenEvents[0] = (float(val[3]) )
     nP[0] = (float(val[4]) )
     n1[0] = (float(val[5]) )
     n2[0] = (float(val[6]) )
@@ -450,7 +451,7 @@ def combineRuns(lists, runList, memoryDepth=65536):
        # mTree = r.TTree.MergeTrees(tlist)
        # comboRun.Write(tlist)
         os.system(cmd)
-  
+'''
 def getLYSOCal(templateRun, testRun, keV2ADC = 10):
 #make histograms with fits, find scaling parameter between template and test, get keV calibration from that
     h1, h2 = getLYSOSpectra(templateRun)
@@ -470,6 +471,43 @@ def getLYSOCal(templateRun, testRun, keV2ADC = 10):
     #get keV/ADC value
     keV = keV2ADC / alpha
     return minAlpha1, minAlpha2, keVADC
+    '''
+
+def getLYSOspectrum(tree, name, xscale = 1.0):
+    h = r.TH1F(name,";Energy (keV); Counts [a.u.]", 600, 0, 4000)
+    for evt in tree:
+        evt=tree.evt
+        tin=tree.tin
+        tP=tree.tP
+        #  evt = tree.evt2
+        amp = tree.amp
+        ch = tree.ch
+        keV = tree.keV
+        coinc = tree.coinc
+        area = tree.area
+        area1a = tree.area1a
+        area1b = tree.area1b
+        iPulse = tree.iPulse
+        keV = tree.keV * xscale
+        tBetweenEvents = tree.tBetweenEvents
+        if coinc == 1 and ch == 1 :
+            h.Fill(keV)
+    return h
+
+def getLYSOCal(tree, testTree, nSteps = 40):
+    h = getLYSOspectrum(tree, "h")
+    h.Draw()
+    maxKolmogorov = 0
+    bestScale = 0
+    for i in range (nSteps):
+        xscale = pow(1.2, float(i)/float(nSteps)  * 2.0 - 1.0)
+        ht = getLYSOspectrum(testTree, "ht"+str(i), xscale)
+        ht.Draw()
+        Kolm = h.KolmogorovTest(ht)
+        if Kolm > maxKolmogorov:
+            maxKolmogorov = Kolm
+            bestScale = xscale
+    return bestScale, maxKolmogorov, h, ht
     
 def compHists(h1, h2, alpha = 1.0):
     sum = 0
@@ -725,7 +763,7 @@ if __name__ == "__main__":
   dir = './pulse_data/'
   exceptions = []
  # f = open("DiRPiRuns.txt","w")
-  runList = getRunList(33677, 33737)
+  runList = getRunList(33344, 33347)
   #print ("runlist: ")
 #  print(runList)
   dictList = []
@@ -828,10 +866,10 @@ def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1800):
     dir = "./pulse_data/"
     file =r.TFile.Open(dir+run+"_dirpipulses.root","READ")
     t=file.Get("pulses")
-    h = r.TH1F("h",";Pulse energy (keV); Counts", 256, 0, 2500)
-    hE = r.TH1F("hE",";Pulse energy (keV); Counts", 256, 0, 2500)
-    hPE = r.TH1F("hPE",";Pulse energy (keV); Counts", 256, 0, 2500)
-    hP = r.TH1F("hP",";Pulse energy (keV); Counts", 256, 0, 2500)
+    h = r.TH1F("h",";Pulse energy (keV); Counts", 256, 0, 4000)
+    hE = r.TH1F("hE",";Pulse energy (keV); Counts", 256, 0, 4000)
+    hPE = r.TH1F("hPE",";Pulse energy (keV); Counts", 256, 0, 4000)
+    hP = r.TH1F("hP",";Pulse energy (keV); Counts", 256, 0, 4000)
     
     evts = []
     nEvt = 0

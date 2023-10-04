@@ -9,20 +9,36 @@ import math
 import csv
 import pulseAnalysis as p
 
-def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1500, current=1.0):
+def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1500, current=1.0, memDepth=4096):
     dir = "./pulse_data/"
     file =r.TFile.Open(dir+run+"_dirpipulses.root","READ")
     t=file.Get("pulses")
-    h = r.TH1F("h",";Pulse energy (keV); Counts", 256, 0, 2500)
-    hE = r.TH1F("hE",";Pulse energy (keV); Counts", 256, 0, 2500)
-    hPE = r.TH1F("hPE",";Pulse energy (keV); Counts", 256, 0, 2500)
-    hP = r.TH1F("hP",";Pulse energy (keV); Counts", 256, 0, 2500)
+    h = r.TH1F("h",";Pulse energy (keV); Counts", 256, 0, 4000)
+    hE = r.TH1F("hE",";Pulse energy (keV); Counts", 256, 0, 4000)
+    hPE = r.TH1F("hPE",";Pulse energy (keV); Counts", 256, 0, 4000)
+    hP = r.TH1F("hP",";Pulse energy (keV); Counts", 256, 0, 4000)
     hT = r.TH1F("hT",";Pulse time (s); Counts", 256, 3000, 18000)
     hTE = r.TH1F("hTE",";Pulse time (s); Counts", 256, 3000, 18000)
     hTP = r.TH1F("hTP",";Pulse time (s); Counts", 256, 3000, 18000)
 
+    h2 = r.TH1F("h2",";Pulse energy (keV); Counts", 256, 0, 4000)
+    hP2 = r.TH1F("hP2",";Pulse energy (keV); Counts", 256, 0, 4000)
+    hT2 = r.TH1F("hT2",";Pulse time (s); Counts", 256, 3000, 18000)
+    hTP2 = r.TH1F("hTP2",";Pulse time (s); Counts", 256, 3000, 18000)
+    
+    cuts = "evt>=start and evt <= stop and tP > 500 and tP < 3500 and iPulse>0"
+    if memDepth == 65536:
+        #only keep triggers between 36 - 38k
+        end = memDepth - 500
+        begin = 38000
+    else:
+        begin = 500
+        end = 3500
+        #     and ( (tP >begin and tP < end) )
     evts = []
     nEvt = 0
+    evts2 = []
+    nEvt2 = 0
     for e in t:
         evt=t.evt
         tin=t.tin
@@ -35,27 +51,42 @@ def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1500, current=1.0):
         area = t.area
         area1a = t.area1a
         area1b = t.area1b
+        area2a = t.area2a
+        area2b = t.area2b
         iPulse = t.iPulse
         if evt>stop:
             break
-        if evt>=start and evt <= stop and ch == 1 and tP > 500 and tP < 3500 and iPulse>0:
+        if evt>=start and evt <= stop and tP > begin and tP < end and iPulse>0:
            # print (keV)
-            h.Fill(keV) #fill the histogram for no cuts
-            hT.Fill(tin)
-            if area1a < 3000 and area1b < 3000:
-                hP.Fill(keV)  #fill the histogram for a veto on large early pulses
-                hTP.Fill(tin)
-            else:
-                if evt not in evts:
-                    evts.append(evt)
-                    nEvt+=1 #count the number of events excluded by the veto
-            if keV> float(energyCut):
-                hE.Fill(keV)  # fill the histogram for the energy cut
-                hTE.Fill(tin)
+            if ch == 1:
+                h.Fill(keV) #fill the histogram for no cuts
+                hT.Fill(tin)
                 if area1a < 3000 and area1b < 3000:
-                    hPE.Fill(keV) # fill the histogram for the energy cut and large pulse veto
+                    hP.Fill(keV)  #fill the histogram for a veto on large early pulses
+                    hTP.Fill(tin)
+                else:
+                    if evt not in evts:
+                        evts.append(evt)
+                        nEvt+=1 #count the number of events excluded by the veto
+                if keV> float(energyCut):
+                    hE.Fill(keV)  # fill the histogram for the energy cut
+                    hTE.Fill(tin)
+                    if area1a < 3000 and area1b < 3000:
+                        hPE.Fill(keV) # fill the histogram for the energy cut and large pulse veto
+            if ch == 2:
+                h2.Fill(keV)
+                hT2.Fill(tin)
+                if area2a < 3000 and area2b < 3000:
+                    hP2.Fill(keV)  #fill the histogram for a veto on large early pulses
+                    hTP2.Fill(tin)
+                else:
+                    if evt not in evts2:
+                        evts2.append(evt)
+                        nEvt2+=1 #count the number of events excluded by the veto
     can = r.TCanvas()
     h.Draw()
+    h2.SetLineColor(2)
+    h2.Draw("same")
    # p.savePlots(can, "./plots/"+run, "pulseCount_evt_"+str(stop))
     
     leg = r.TLegend()
@@ -80,12 +111,15 @@ def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1500, current=1.0):
     
     #write things to .txt/csv
     # field names
-    fields = ["cut","start", "stop", "counts", "nEvts", "current (nA)"]
+    fields = ["cut","start", "stop", "counts", "nEvts", "current (nA)", "totalEnergy (keV)"]
         # data rows of csv file
-    rows = [ ["none", start, stop, h.GetEntries(), stop-start+1 ],
-        ["largeEarlyPulses", start, stop, hP.GetEntries(), stop-start+1 - nEvt ],
-        ["energy", start, stop, hE.GetEntries(), stop-start+1 ],
-        ["both", start, stop, hPE.GetEntries(), stop-start+1 - nEvt  ] ]
+    rows = [ ["none", start, stop, h.GetEntries(), stop-start+1 , h.Integral()],
+        ["largeEarlyPulses", start, stop, hP.GetEntries(), stop-start+1 - nEvt, hP.Integral() ],
+        ["energy", start, stop, hE.GetEntries(), stop-start+1 , hE.Integral()],
+        ["both", start, stop, hPE.GetEntries(), stop-start+1 - nEvt , hPE.Integral() ],
+        ["LYSOnone", start, stop, h2.GetEntries(), stop-start+1 , h2.Integral()],
+        ["LYSOlargeEarlyPulses", start, stop, hP2.GetEntries(), stop-start+1 - nEvt2, hP2.Integral() ],
+        ]
     # name of csv file
     '''
     filename = "beamCounting_evt_"+str(stop)+".csv"
@@ -100,12 +134,13 @@ def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1500, current=1.0):
         # writing the data rows
         csvwriter.writerows(rows)
     '''
+    
  #   print(fields)
 #    for row in rows:
   #      print(row)
     return rows
     
-def getRate(before, during, after, current):
+def getRate(before, during, after, current, nSamples):
     signalCounts = []
     bgCounts = []
     signal_BGCounts = []
@@ -126,7 +161,7 @@ def getRate(before, during, after, current):
         countsBefore = before[i][3]
         start.append( during[i][1] )
         stop.append(during[i][2])
-        time.append( 3000. * 25.0e-9 * nEvt)
+        time.append( nSamples * 25.0e-9 * nEvt)
         signalRate.append(counts/time[i])
         poissonErr.append(pow(counts,0.5)/time[i])
         signalCounts.append(counts)
@@ -139,7 +174,7 @@ def getRate(before, during, after, current):
         i+=1
        # print(i)
   #  print(signalRate)
-    ret = [ start, stop, signalRate,   poissonErr,  signal_BGRate,   poissonErrBG ,  time, current, signalCounts, signal_BGCounts, bgCounts       ]
+    ret = [ start, stop, signalRate, poissonErr,  signal_BGRate,   poissonErrBG ,  time, current, signalCounts, signal_BGCounts, bgCounts ]
    # print(ret)
     return ret
 
@@ -155,6 +190,7 @@ if __name__ == "__main__":
     energyCut=args.energyCut
     areaCut=args.areaCut
     run="Run"+str(run)
+    memDepth=4096
     
     if run=="Run33362":
         pairs = [
@@ -168,6 +204,42 @@ if __name__ == "__main__":
   #      [99000, 108000, 130000,133000, 99000, 108000, 0.001], #1 pA
   #      [99000, 108000, 137500,140700, 99000, 108000, 0.001], #1 pA
         ]
+        
+        
+        '''
+        0  0 8000
+1  10000  13500
+0  13900 14500
+10  14700 15400
+0 15500 16000
+10 16300 17700
+0 18000 19200
+50 19700 21200
+0 21500 22800
+50 23000 23600
+50 24000 24600
+0 25000 26500
+50 27100 27600
+0 27900 28700
+50 28900 29600
+0. 29800 31000
+
+        '''
+    elif run=="Run33618":
+        pairs = [
+        [0, 8000, 10000, 13500, 13900, 14500, 1], #0.5nA background
+        [13900, 14500, 14700, 15400, 15500, 16000, 10], #0.5nA background
+        [15500, 16000, 16300, 17700, 18000, 19200, 10], #0.5nA background
+        [18000, 19200, 19700, 21200, 21500, 22800, 50], #0.5nA background
+        [21500, 22800, 23000, 23600, 25000, 26500, 50], #0.5nA background
+        [27900, 28700, 27100, 27600, 27900, 28700, 50], #0.5nA background
+        [27900, 28700, 10000, 28900, 29600, 31000, 50], #0.5nA background
+  #      [99000, 108000, 113000,116500, 99000, 108000, 0.05], #50 pA
+  #      [99000, 108000, 121000,124000, 99000, 108000, 0.01], #10 pA
+  #      [99000, 108000, 130000,133000, 99000, 108000, 0.001], #1 pA
+  #      [99000, 108000, 137500,140700, 99000, 108000, 0.001], #1 pA
+        ]
+        memDepth = 65536
     elif run=="Run33361":
         #for run 33361, with dirpi13
         pairs = [
@@ -226,44 +298,68 @@ if __name__ == "__main__":
         for i in range (nParts):
             part = [0 , 60000, parts[i], parts[i+1], 600000, 65000, 0.01]
             pairs.append(part)
+    
+    if memDepth == 65536:
+        #only keep triggers between 36 - 38k
+        end = memDepth - 500
+        begin = 38000
+    else:
+        begin = 500
+        end = 3500
+    
     filename="pulseCounting"+run+".root"
                   #  tuples start stop signalRate,     signal_BGRate,  poissonErr, poissonErrBG , rateS_BG, signal_BG,  time, current
     file =r.TFile.Open(filename,"RECREATE")
     
-    start =  array('f', [0,0 ,0, 0])
-    stop =  array('f', [0,0 ,0, 0])
-    signalRate =  array('f', [0,0 ,0, 0])
-    poissonErr  =  array('f', [0,0 ,0, 0])
-    signal_BGRate  =  array('f', [0,0 ,0, 0])
-    poissonErrBG  =  array('f', [0,0 ,0, 0])
-    time  =  array('f', [0,0 ,0, 0])
-    current  =  array('f', [0,0 ,0, 0])
-    signalCounts  = array('f', [0,0 ,0, 0])
-    signal_BGCounts  = array('f', [0,0 ,0, 0])
-    bgCounts  = array('f', [0,0 ,0, 0])
-    
+    start =  array('f', [0,0 ,0, 0,0,0])
+    stop =  array('f', [0,0 ,0, 0,0,0])
+    signalRate =  array('f', [0,0 ,0, 0,0,0])
+    poissonErr  =  array('f', [0,0 ,0, 0,0,0])
+    signal_BGRate  =  array('f', [0,0 ,0, 0,0,0])
+    poissonErrBG  =  array('f',[0,0 ,0, 0,0,0])
+    time  =  array('f', [0,0 ,0, 0,0,0])
+    current  =  array('f', [0,0 ,0, 0,0,0])
+    signalCounts  = array('f', [0,0 ,0, 0,0,0])
+    signal_BGCounts  = array('f', [0,0 ,0, 0,0,0])
+    bgCounts  = array('f', [0,0 ,0, 0,0,0])
+    ch  = array('f', [0,0 ,0, 0,0,0])
+
     tree = r.TTree("rates", "rates")
-    tree.Branch("start", start, "start[4]/F")
-    tree.Branch("stop", stop, "stop[4]/F")
-    tree.Branch("signalRate", signalRate, "signalRate[4]/F")
-    tree.Branch("poissonErr", poissonErr, "poissonErr[4]/F")
-    tree.Branch("signal_BGRate", signal_BGRate, "signal_BGRate[4]/F")
-    tree.Branch("poissonErrBG", poissonErrBG, "poissonErrBG[4]/F")
-    tree.Branch("time", time, "time[4]/F")
+    tree.Branch("start", start, "start[6]/F")
+    tree.Branch("stop", stop, "stop[6]/F")
+    tree.Branch("signalRate", signalRate, "signalRate[6]/F")
+    tree.Branch("poissonErr", poissonErr, "poissonErr[6]/F")
+    tree.Branch("signal_BGRate", signal_BGRate, "signal_BGRate[6]/F")
+    tree.Branch("poissonErrBG", poissonErrBG, "poissonErrBG[6]/F")
+    tree.Branch("time", time, "time[6]/F")
     tree.Branch("current", current, "current")
-    tree.Branch("signalCounts", signalCounts, "signalCounts[4]/F")
-    tree.Branch("signal_BGCounts", signal_BGCounts, "signal_BGCounts[4]/F")
-    tree.Branch("bgCounts", bgCounts, "bgCounts[4]/F")
+    tree.Branch("signalCounts", signalCounts, "signalCounts[6]/F")
+    tree.Branch("signal_BGCounts", signal_BGCounts, "signal_BGCounts[6]/F")
+    tree.Branch("ch", ch, "ch[6]/F")
 
     h = r.TH1F("h",";Pulse rate (Hz); Counts", 100, 0, 250)
     hBG = r.TH1F("hBG",";Pulse rate (Hz); Counts", 100, 0, 250)
     hErr = r.TH1F("hErr",";Pulse rate (Hz); Counts", 100, 0, 25)
     hErrBG = r.TH1F("hErrBG",";Pulse rate (Hz); Counts", 100, 0, 25)
     histos = [h, hBG, hErr, hErrBG]
+    h2 = r.TH1F("h2",";Pulse rate (Hz); Counts", 100, 0, 250)
+    hBG2 = r.TH1F("hBG2",";Pulse rate (Hz); Counts", 100, 0, 250)
+    hErr2 = r.TH1F("hErr2",";Pulse rate (Hz); Counts", 100, 0, 25)
+    hErrBG2 = r.TH1F("hErrBG2",";Pulse rate (Hz); Counts", 100, 0, 25)
+    histos2 = [h, hBG, hErr, hErrBG]
     #filename="pulseCounting"+run+".csv"
  #   with open(filename, 'w') as csvfile:
             # creating a csv writer object
            # csvwriter = csv.writer(csvfile)
+    graphs = []
+    graphsBG = []
+    for i in range(6):
+        graphs.append( r.TGraphErrors() )
+        graphsBG.append(r.TGraphErrors() )
+        graphs[i].SetMarkerStyle(23)
+        graphsBG[i].SetMarkerStyle(23)
+
+    iPair = 0
     for pair in pairs:
         start[0] = pair[0]
         stop[0] = pair[1]
@@ -274,11 +370,12 @@ if __name__ == "__main__":
         start[0] = pair[4]
         stop[0] = pair[5]
         after = getNbeam(start[0],stop[0], run, energyCut, pair[6])
-        ret = getRate(before, during, after, pair[6])
+        ret = getRate(before, during, after, pair[6], end - begin)
         print("the return of get rate is " )
         print(ret)
-        #start, stop, signalRate,   poissonErr,  signal_BGRate,   poissonErrBG ,  time, current, signalCounts, signal_BGCounts, bgCounts        ]
-        for i in range(4):
+        nCuts = len(ret[0])
+        #ret = [ start, stop, signalRate,   poissonErr,  signal_BGRate,   poissonErrBG ,  time, current, signalCounts, signal_BGCounts, bgCounts        ]
+        for i in range(nCuts): #loop over the different cuts
             start[i] = ret[0][i]
             stop[i] = ret[1][i]
             signalRate[i] =  ret[2][i]
@@ -290,17 +387,26 @@ if __name__ == "__main__":
             signalCounts[i]  = ret[8][i]
             signal_BGCounts[i]  = ret[9][i]
             bgCounts[i]  = ret[10][i]
+            if i <4:
+                ch[i] = 1
+            else:
+                ch[i] = 2
             if i == 0:
                 h.Fill(signalRate[i])
                 hBG.Fill(signal_BGRate[i])
                 hErr.Fill(poissonErr[i])
                 hErrBG.Fill(poissonErrBG[i])
+            graphs[i].AddPoint(float(current[i]), float(signalRate[i]) )
+            graphs[i].SetPointError(iPair, float( 0.), float(poissonErr[i]) )
+            graphsBG[i].AddPoint( float(current[i]), float(signal_BGRate[i]) )
+            graphsBG[i].SetPointError(iPair,  float(0.), float(poissonErrBG[i]) )
+            iPair+=1
         tree.Fill()
         #fill ntuple from ret? # tuples start stop signalRate,     signal_BGRate,  poissonErr, poissonErrBG , rateS_BG, signal_BG,  time, current?
         #then every run has an nutuple with the things we actually want to measure
         rows = [before, during, after]
         rows = []
-        for i in range(4):
+        for i in range(6):
             rows.append([])
         i=-1
         for list in before:
@@ -325,7 +431,15 @@ if __name__ == "__main__":
     tree.Write()
     for histo in histos:
         histo.Write()
+    # save tgraphs here?
+    can = r.TCanvas()
+    for g in graphs:
+        g.Draw()
+        can.Write()
+    for g in graphsBG:
+        g.Draw()
+        can.Write()
     file.Write()
-    rows = getNbeam(105000,225000, run, energyCut)
+  #  rows = getNbeam(105000,225000, run, energyCut)
 
 
