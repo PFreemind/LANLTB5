@@ -763,7 +763,7 @@ if __name__ == "__main__":
   dir = './pulse_data/'
   exceptions = []
  # f = open("DiRPiRuns.txt","w")
-  runList = getRunList(33344, 33347)
+  runList = getRunList(33811, 33900)
   #print ("runlist: ")
 #  print(runList)
   dictList = []
