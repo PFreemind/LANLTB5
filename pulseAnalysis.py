@@ -6,6 +6,8 @@ import os
 import configparser
 import math
 import csv
+import argparse
+
 
 # scripting to parse and plot david's pulse data from 2022 November Beam Development
 
@@ -241,6 +243,7 @@ def countPulses(file):
     
 def downloadAnt(run, url, dir = './pulse_data/'):
     resp = requests.get(url)
+    print ("copying file from "+url)
     ant = resp.text
     #f = open(dir+"Run"+str(run)+"_pulses.ant","w")
     f = open(dir+"Run"+str(run)+"_dirpipulses.ant","w")
@@ -759,11 +762,23 @@ def trimEmptyRuns(runList, remote=False):
 #oh fuck anything involving ssh?
 
 if __name__ == "__main__":
+  parser = argparse.ArgumentParser(description='measure some beam currents')
+  parser.add_argument('-f', '--first', help='first run',type=int, default = 33811 )
+  parser.add_argument('-l', '--last', help='last run',type=int, default = 33900 )
+  parser.add_argument('-t', '--noTrees', action ='store_true', help = 'bool for making ROOT trees' )
+  parser.add_argument('-p', '--noPlots', action ='store_true',  help = 'bool for making plots')
+  
+
+  args = parser.parse_args()
+  first = args.first
+  last = args.last
+  noTrees = args.noTrees
+  noPlots = args.noPlots
   runs = [8312, 8313] # [8122, 8123, 8124, 8125, 8126]#8116, 8117, 8118, 8119, 8120]
   dir = './pulse_data/'
   exceptions = []
  # f = open("DiRPiRuns.txt","w")
-  runList = getRunList(33811, 33900)
+  runList = getRunList(first, last)
   #print ("runlist: ")
 #  print(runList)
   dictList = []
@@ -789,9 +804,12 @@ if __name__ == "__main__":
         file = dir +'Run'+str(run[0])+'_dirpipulses.ant'
         rfile = dir +'Run'+str(run[0])+'_dirpipulses.root'
         output = dir +'Run'+str(run[0])+'_dirpipulses.root'
-        makeTree(file, output)
-        makePlots(output)
-        # countPulses(rfile)/plots/230703225358_68513.gif
+        if not noTrees:
+          #  print("test")
+            makeTree(file, output)
+        if not  noPlots:
+            makePlots(output)
+        #countPulses(rfile)/plots/230703225358_68513.gif
     except:
         print("skipping run "+ str(run[0]))
         print (url)
