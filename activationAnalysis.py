@@ -9,7 +9,6 @@ import math
 import csv
 import pulseAnalysis as p
 
-
 #get number of LYSO pulses in  a run
 
 def getNLYSO(tree):
@@ -26,8 +25,8 @@ def getNLYSO(tree):
 def getBGSpectrum(tree, name):
     h = r.TH1F(name,";Energy (keV); Counts [a.u.]", 600, 0, 4000)
     h2 = r.TH1F(name+"2",";Energy (keV); Counts [a.u.]", 600, 0, 4000)
-    ht = r.TH1F(name+"t",";time between events (ms); Counts [a.u.]", 200, 0, 2000)
-    ht2 = r.TH1F(name+"t2",";time between events (ms); Counts [a.u.]", 100, 0, 100)
+    ht = r.TH1F(name+"t",";time between events (ms); Counts [a.u.]", 100, 0, 99)
+    ht2 = r.TH1F(name+"t2",";time between events (ms); Counts [a.u.]", 100, 0, 99)
     
 #    h1 = r.TH1F("h1",";Energy (keV); Counts [a.u.]", 256, 0, 2500)
     for e in tree:
@@ -87,6 +86,7 @@ def getBeamRate( run = "Run33677", memDepth=4096):
     return rate
     
 if __name__ == "__main__":
+    #r.gROOT.SetBatch(True)
     dir = "./pulse_data/"
     file0 =r.TFile.Open(dir+"Run33677_dirpipulses.root","READ")
     t0=file0.Get("pulses")
@@ -98,29 +98,30 @@ if __name__ == "__main__":
     scale1, foo = getNLYSO(t1)
     print("The scale factor for Run33737 is: ", scale1)
     runs = [
-   # "Run33677_dirpipulses.root",
-   # "Run33682_dirpipulses.root",
-   # "Run33687_dirpipulses.root",
-   # "Run33692_dirpipulses.root",
-   # "Run33697_dirpipulses.root",
-   # "Run33702_dirpipulses.root",
-   # "Run33707_dirpipulses.root",
-   # "Run33712_dirpipulses.root",
-  #  "Run33717_dirpipulses.root",
-  #  "Run33722_dirpipulses.root",
-  #  "Run33727_dirpipulses.root",
- ##   "Run33732_dirpipulses.root",
- #   "Run33737_dirpipulses.root",
+    "Run33677_dirpipulses.root",
+    "Run33682_dirpipulses.root",
+    "Run33687_dirpipulses.root",
+    "Run33692_dirpipulses.root",
+    "Run33697_dirpipulses.root",
+    "Run33702_dirpipulses.root",
+    "Run33707_dirpipulses.root",
+    "Run33712_dirpipulses.root",
+    "Run33717_dirpipulses.root",
+    "Run33722_dirpipulses.root",
+    "Run33727_dirpipulses.root",
+    "Run33732_dirpipulses.root",
+    "Run33737_dirpipulses.root",
  #   "Run33344_dirpipulses.root",
  #   "Run33347_dirpipulses.root",
-    "Run33857_dirpipulses.root",
-    "Run33871_dirpipulses.root",
+ #   "Run33857_dirpipulses.root",
+  #  "Run33871_dirpipulses.root",
     ]
     
     times = []
     scales = []
     nEvts = []
     errx = []
+    errt = []
     erry = []
     hs = r.THStack("hs","")
     i =0
@@ -128,12 +129,15 @@ if __name__ == "__main__":
     can = r.TCanvas()
     can.SetLogy(1)
     r.gStyle.SetOptFit(1)
-    f1 = r.TF1("f1","expo", 870, 940)
+    f1 = r.TF1("f1","expo", 20, 50)
     taus = []
     taus2 = []
     tausC = []
-    #in addition to taus and scales, we can get a direct measurement of the rate with pulse counting
+    tauErrs = []
+    tauErrsC = []
+        #in addition to taus and scales, we can get a direct measurement of the rate with pulse counting
     rates = []
+    
     for run in runs:
         print("looping")
         times.append(offset + 2.0 + 4.0 * i)
@@ -143,8 +147,10 @@ if __name__ == "__main__":
             template = t
         n, nEvt = getNLYSO(t)
        # print("the normalization factor is:")
+        nLYSOErr = pow(n, 0.5)
         errx.append(0.0001)
-        erry.append(0.)#1.0/pow(n,0.5))
+        erry.append(nLYSOErr)#1.0/pow(n,0.5))
+        errt.append(0.)#1.0/pow(n,0.5))
         scales.append(1.0/n)
         nEvts.append(nEvt)
         h, ht, h2, ht2 = getBGSpectrum(t, "h"+str(i))
@@ -173,10 +179,14 @@ if __name__ == "__main__":
       #  ht2.Draw("same")
         ht.Fit("f1","R")
         tau = -1.0/ (f1.GetParameter(1) + 1e-9)
+        tauErr = (f1.GetParError(1) )
+        tauErrs.append(tauErr)
         taus.append(tau)
-        tau += 1000 * 25e-9 * 1000 #correction to include acquisition window
+     #   tau += 1000 * 25e-9 * 1000 #correction to include acquisition window #actually, you don't want this
         tau *= nEvt
         tausC.append(tau)
+        tauErr *= nEvt
+        tauErrsC.append(tauErr)
         rates.append( getBeamRate( run , 65536) )
        # ht2.Fit("f1","R")
        # tau2 = -1.0/ (f1.GetParameter(1))
@@ -203,6 +213,17 @@ if __name__ == "__main__":
     f4 =  r.TF1("f4","expo", 0, 100 )
     g.Fit("f4")
     p.savePlots(can, "./", "scaleFactors")
+    
+    gT = r.TGraphErrors(i, np.array(tausC), np.array( np.reciprocal(scales) ), np.array(tauErrsC), np.array(erry) )
+    can.SetLogy(0)
+    gT.SetMarkerStyle(1)
+    gT.SetTitle("Normalization factor comparison;#tau [ms]; Normalization factor from nLYSO")
+   # gT.SetMinimum(0)
+    #gT.SetMaximum(3e-5)
+    gT.Draw("ALP")
+    f5 =  r.TF1("f5","x*[0]", 0, 100 )
+    gT.Fit("f5")
+    p.savePlots(can, "./", "nLYSOvsTau")
 
     #get the background spectra, (cuts on ch, coinc)
     h0,h0t  =   getBGSpectrum(t0, "h")[0:2]

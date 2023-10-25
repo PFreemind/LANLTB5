@@ -4,11 +4,12 @@ import numpy as np
 from array import array
 import requests
 import os
-import configparser
 import math
 import csv
 import pulseAnalysis as p
 import copy
+r.gROOT.SetBatch(True)
+r.gStyle.SetOptFit(0)
     
 def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produced by beamCurrents.py, see beamCurrentJobs.py for implementation
     cuts = [
@@ -40,20 +41,29 @@ def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produ
     #then add background subtracted runs
     #make these all gifs so you can go through and explain them in slides 1-by-1
     can = r.TCanvas()
+    canE = r.TCanvas()
     can.SetLogy(1)
+    canE.SetLogy(1)
     iPart = 0
-    #for run in runs: #graphs
     for i in range(nCuts): #colors
         sigmaGraphs.append(copy.deepcopy( r.TGraphErrors()) )
         sigmaGraphsE.append(copy.deepcopy( r.TGraphErrors()) )
-        sigmaFits.append(r.TF1("fS"+str(i),"TMath::Sqrt( [1]*x ) + [0]", 0, 100))
+        sigmaFits.append(r.TF1("fS"+str(i),"TMath::Sqrt( [1]*x ) + [0]", 0, 200))
         sigmaFits[i].SetParLimits(1,0.1, 20)
         sigmaFits[i].SetLineWidth(1)
         poissonGraphs.append(copy.deepcopy( r.TGraphErrors()) )
         poissonGraphsE.append(copy.deepcopy( r.TGraphErrors()) )
-        poissonFits.append(r.TF1("fP"+str(i),"TMath::Sqrt( [1]*x ) + [0]", 0, 100))
+        poissonFits.append(r.TF1("fP"+str(i),"TMath::Sqrt( [1]*x ) + [0]", 0, 200))
         poissonFits[i].SetParLimits(1,0.1, 20)
-        poissonFits[i].SetLineWidth(1)
+        if str(run)=="33362":
+            sigmaFits[i].SetParLimits(1, 1e2, 2e6)
+            sigmaFits[i].SetParameter(0, 3250)
+            sigmaFits[i].SetParameter(1, 384050)
+            poissonFits[i].SetParLimits(1, 1e2, 2e6)
+            poissonFits[i].SetParLimits(0, -10, 100)
+            poissonFits[i].SetParameter(0, 0)
+            poissonFits[i].SetParameter(1, 164600)
+            poissonFits[i].SetLineWidth(1)
         iPart = 0
         for part in parts: # points
             filename = "pulseCountingRun"+str(run)+"_n"+str(part)+".root"
@@ -61,11 +71,16 @@ def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produ
             t = f.Get("rates")
       #      g = f.Get("g"+suffix(i)+str(i))
            
-            hSignal = r.TH1F("hSignal", "", 100, 0, 1000)
-            hPoisson = r.TH1F("hPoisson","", 100, 0, 1000 )
-            hEnergy = r.TH1F("hEnergy", "", 800, 0, 4000)
-            hPoissonE = r.TH1F("hPoissonE", "", 800, 0, 4000)
-
+            if str(run) == "33362":
+                hSignal = r.TH1F("hSignal", "", 100, 0, 1e5)
+                hPoisson = r.TH1F("hPoisson","", 100, 0, 1e4 )
+                hEnergy = r.TH1F("hEnergy", "", 800, 0, 4e5)
+                hPoissonE = r.TH1F("hPoissonE", "", 800, 0, 4e5)
+            else:
+                hSignal = r.TH1F("hSignal", "", 100, 0, 1000)
+                hPoisson = r.TH1F("hPoisson","", 100, 0, 1000 )
+                hEnergy = r.TH1F("hEnergy", "", 800, 0, 4000)
+                hPoissonE = r.TH1F("hPoissonE", "", 800, 0, 4000)
             for e in t:
                 signalRate = t.signalRate[i]
                 energyRate = t.energyRate[i]
@@ -77,7 +92,7 @@ def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produ
                 hPoisson.Fill(poissonErr)
                 hEnergy.Fill(energyRate)
                 hPoissonE.Fill(poissonErrE)
-            sigmaGraphs[i].AddPoint(part,  hSignal.GetRMS() )
+            sigmaGraphs[i].AddPoint(part,  hSignal.GetStdDev() )
             sigmaGraphs[i].SetPointError(iPart,  0.0, hSignal.GetRMSError() )
             sigmaGraphsE[i].AddPoint(part,  hEnergy.GetRMS() )
             sigmaGraphsE[i].SetPointError(iPart,  0.0, hEnergy.GetRMSError() )
@@ -85,8 +100,8 @@ def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produ
 
             poissonGraphs[i].AddPoint(part, hPoisson.GetMean() )
             poissonGraphs[i].SetPointError(iPart, 0.0, hPoisson.GetMeanError() )
-            poissonGraphs[i].AddPoint(part, hPoissonE.GetMean() )
-            poissonGraphs[i].SetPointError(iPart, 0.0, hPoissonE.GetMeanError() )
+            poissonGraphsE[i].AddPoint(part, hPoissonE.GetMean() )
+            poissonGraphsE[i].SetPointError(iPart, 0.0, hPoissonE.GetMeanError() )
             iPart += 1
         sigmaGraphs[i].SetMarkerColor(p.colors[i])
         sigmaGraphs[i].SetLineColor(p.colors[i])
@@ -102,8 +117,12 @@ def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produ
        
         #if i ==0:
         sigmaGraphs[i].SetTitle("Comparison of Sample Std Dev to Poisson Errors;Number of partitions of run;Estimated Error [Hz];")
-        sigmaGraphs[i].SetMinimum(0.1)
-        sigmaGraphs[i].SetMaximum(40)
+        can.cd()
+        sigmaGraphs[i].SetMinimum(0.1)#0.1)
+        sigmaGraphs[i].SetMaximum(40)#40
+        if str(run) == "33362":
+            sigmaGraphs[i].SetMinimum(1)#0.1)
+            sigmaGraphs[i].SetMaximum(3e4)#40)
         sigmaGraphs[i].Draw("AP")
         #else:
         #   sigmaGraphs[i].Draw("same&&P")
@@ -114,7 +133,29 @@ def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produ
         leg.AddEntry(sigmaGraphs[i], "#sigma ( #mu ( rate ))        "+cuts[i]+" #chi^{2}/NDF ="+str(sigmaFits[i].GetChisquare())[0:5]+" / "+str(sigmaFits[i].GetNDF()) )
         leg.AddEntry(poissonGraphs[i], "#mu ( #sigma_{Poisson} ( rate )) "+cuts[i]+" #chi^{2}/NDF ="+str(poissonFits[i].GetChisquare())[0:5]+" / "+str(poissonFits[i].GetNDF()) )
         leg.Draw()
-        p.savePlots(can, "./", "Run"+str(run)+"systematicsCheck_cut" + str(i) )
+        p.savePlots(can, "./plots/Run"+run+"/", "Run"+str(run)+"systematicsCheck_cut" + str(i) )
+        
+        sigmaGraphsE[i].SetTitle("Comparison of Sample Std Dev to Poisson Errors;Number of partitions of run;Estimated Error [Hz];")
+        sigmaGraphsE[i].SetMinimum(0.1)#0.1)
+        sigmaGraphsE[i].SetMaximum(100)#40)
+        canE.cd()
+        if str(run) == "33362":
+            sigmaGraphsE[i].SetMinimum(1)#0.1)
+            sigmaGraphsE[i].SetMaximum(3e4)#40)
+        sigmaGraphsE[i].Draw("AP")
+        #else:
+        #   sigmaGraphsE[i].Draw("same&&P")
+        sigmaGraphsE[i].Fit("fS"+str(i), "R" )
+        poissonGraphsE[i].Draw("P&&same")
+        poissonGraphsE[i].Fit("fP"+str(i),"R")
+        leg = r.TLegend(0.3, 0.15,  0.85, 0.55)
+        leg.AddEntry(sigmaGraphs[i], "#sigma ( #mu ( rate ))        "+cuts[i]+" #chi^{2}/NDF ="+str(sigmaFits[i].GetChisquare())[0:5]+" / "+str(sigmaFits[i].GetNDF()) )
+        leg.AddEntry(poissonGraphsE[i], "#mu ( #sigma_{Poisson} ( rate )) "+cuts[i]+" #chi^{2}/NDF ="+str(poissonFits[i].GetChisquare())[0:5]+" / "+str(poissonFits[i].GetNDF()) )
+        leg.Draw()
+        p.savePlots(can, "./plots/Run"+run+"/", "Run"+str(run)+"systematicsCheckE_cut" + str(i) )
+        
+        
+        
         i+=1
          #   if suffix == "" or suffix == "E"
           #      sigmaGraphs[i].SetPointError(index?, 0, g.Get)
@@ -300,7 +341,7 @@ def getRate(before, during, after, current, nSamples):
         signalRate.append(counts/time[i])
         poissonErr.append(pow(counts,0.5)/time[i])
         energyRate.append(signalEnergy[i]/time[i])
-        poissonErrE.append(errDuring/time[i])
+        poissonErrE.append(poissonErr[i]*signalEnergy[i])
         signalCounts.append(counts)
         nAfter = after[i]
         bg = (countsAfter *  nEvt/nEvtAfter + countsBefore * nEvt/nEvtBefore) * 0.5
@@ -474,13 +515,15 @@ if __name__ == "__main__":
     graphsBG = []
     graphsE = []
     graphsEBG = []
-
+    rate_v_start =[]
+    
     for i in range(6):
         graphs.append(copy.deepcopy( r.TGraphErrors()) )
         graphsBG.append(copy.deepcopy(r.TGraphErrors()) )
         graphsE.append(copy.deepcopy(r.TGraphErrors()) )
         graphsEBG.append(copy.deepcopy(r.TGraphErrors()) )
-        graphs[i].SetMarkerStyle(23)
+        rate_v_start.append(copy.deepcopy(r.TGraphErrors()) )
+        graphs[i].SetMarkerStyle(1)
         #graphs[i].SetMarkerSize(5)
         graphsBG[i].SetMarkerStyle(32)
         graphsE[i].SetMarkerStyle(23)
@@ -500,7 +543,7 @@ if __name__ == "__main__":
         stop[0] = pair[5]
         after = getNbeam(start[0],stop[0], run, energyCut, pair[6])
         ret = getRate(before, during, after, pair[6], end - begin)
-        print("the return of get rate is " )
+        print("the return of getRate is " )
         print(ret)
         nCuts = len(ret[0])
         i = 0
@@ -512,8 +555,6 @@ if __name__ == "__main__":
             poissonErr[i]  =  ret[3][i]
             signal_BGRate[i]  =  ret[4][i]
             poissonErrBG[i]  =  ret[5][i]
-            poissonErrE[i]  =  ret[5][i]
-            poissonErrEBG[i]  =  ret[5][i]
 
             time[i]  = ret[6][i]
             current[i]  =  ret[7]
@@ -539,12 +580,14 @@ if __name__ == "__main__":
                 print(poissonErrE[i])
             graphs[i].AddPoint(float(current[i]), float(signalRate[i]) )
             graphs[i].SetPointError(iPair, float( 0.), float(poissonErr[i]) )
-            graphsE[i].AddPoint(float(current[i]), float(energyRate[i]) )
-            graphsE[i].SetPointError(iPair, float( 0.), float(poissonErrE[i]) )
+           # graphsE[i].AddPoint(float(current[i]), float(energyRate[i]) )
+           # graphsE[i].SetPointError(iPair, float( 0.), float(poissonErrE[i]) )
             graphsBG[i].AddPoint( float(current[i]), float(signal_BGRate[i]) )
             graphsBG[i].SetPointError(iPair,  float(0.), float(poissonErrBG[i]) )
-            graphsEBG[i].AddPoint( float(current[i]), float(energyRate_BG[i]) )
-            graphsEBG[i].SetPointError(iPair,  float(0.), float(poissonErrEBG[i]) )
+            rate_v_start[i].AddPoint(float(start[i] ), float(signalRate[i]) )
+            rate_v_start[i].SetPointError(iPair, float(0.), float(poissonErr[i]))
+            #graphsEBG[i].AddPoint( float(current[i]), float(energyRate_BG[i]) )
+            #graphsEBG[i].SetPointError(iPair,  float(0.), float(poissonErrEBG[i]) )
             i+=1
         tree.Fill()
         #fill ntuple from ret? # tuples start stop signalRate,     signal_BGRate,  poissonErr, poissonErrBG , rateS_BG, signal_BG,  time, current?
@@ -604,7 +647,7 @@ if __name__ == "__main__":
             g.Draw("same&&P")
         leg.AddEntry(g, cuts[i])
         leg.Draw()
-        p.savePlots(can,"./","Run"+run+"_rateSummary_"+str(i))
+        p.savePlots(can,"./plots/"+run+"/", run+"_rateSummary_"+str(i))
         g.Write("g"+str(i))
         i+=1
     i=0
@@ -619,7 +662,7 @@ if __name__ == "__main__":
         i+=1
     leg.Draw()
     can.Write()
-    p.savePlots(can,"./","Run"+run+"_rateSummary")
+    p.savePlots(can,"./plots/"+run+"/","Run"+run+"_rateSummary")
     i =0
     leg = r.TLegend(0.2,0.65, 0.5, 0.85)
     for g in graphsE:
@@ -649,9 +692,25 @@ if __name__ == "__main__":
         i+=1
     can.SetLogy(1)
     can.SetLogx(1)
+    i=0
+    for g in rate_v_start:
+        g.SetLineColor(p.colors[i])
+        g.SetMarkerColor(p.colors[i])
+        g.SetMarkerStyle(1)
+       # if i ==0:
+       #     g.Draw("AP")
+      #  else:
+        g.Draw("AP")       # leg.AddEntry(g, "with background subtracted")
+        g.Write("rate_v_start"+str(i))
+        can.Write()
+        p.savePlots(can,"./plots/"+run+"/", run+"_rate_v_startSummary"+str(i)+"_n"+str( g.GetN() ) )
+        i+=1
+    leg.Draw()
     can.Write()
-    p.savePlots(can,"./","Run"+run+"_energySummary")
-    
+    i =0
+  #  p.savePlots(can,"./plots/"+run+"/", "Run"+run+"_energySummary")
+    can.Write()
+
     file.Write()
   #  rows = getNbeam(105000,225000, run, energyCut)
 
