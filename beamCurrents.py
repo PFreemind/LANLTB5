@@ -19,6 +19,8 @@ def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produ
         "veto and cut",
         "LYSO, none",
         "LYSO, largeEarlyPulses",
+        "E < 500 keV",
+        "E > 500 keV && E < 1500 keV"
     ]
     nCuts = len(cuts)
 
@@ -153,9 +155,6 @@ def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produ
         leg.AddEntry(poissonGraphsE[i], "#mu ( #sigma_{Poisson} ( rate )) "+cuts[i]+" #chi^{2}/NDF ="+str(poissonFits[i].GetChisquare())[0:5]+" / "+str(poissonFits[i].GetNDF()) )
         leg.Draw()
         p.savePlots(can, "./plots/Run"+run+"/", "Run"+str(run)+"systematicsCheckE_cut" + str(i) )
-        
-        
-        
         i+=1
          #   if suffix == "" or suffix == "E"
           #      sigmaGraphs[i].SetPointError(index?, 0, g.Get)
@@ -189,6 +188,11 @@ def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1500, current=1.0, 
     hT2 = r.TH1F("hT2",";Pulse time (s); Counts", 256, 3000, 18000)
     hTP2 = r.TH1F("hTP2",";Pulse time (s); Counts", 256, 3000, 18000)
     
+    hElo = r.TH1F("hElo",";Pulse energy (keV); Counts", 256, 0, 4000)
+    hEmid = r.TH1F("hEmid",";Pulse energy (keV); Counts", 256, 0, 4000)
+
+    hTElo = r.TH1F("hTElo",";Pulse time (s); Counts", 256, 3000, 18000)
+    hTEmid = r.TH1F("hTEmid",";Pulse time (s); Counts", 256, 3000, 18000)
     cuts = "evt>=start and evt <= stop and tP > 500 and tP < 3500 and iPulse>0"
     if memDepth == 65536:
         #only keep triggers between 36 - 38k
@@ -235,7 +239,14 @@ def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1500, current=1.0, 
                     hE.Fill(keV)  # fill the histogram for the energy cut
                     hTE.Fill(tin)
                     if area1a < 3000 and area1b < 3000:
-                        hPE.Fill(keV) # fill the histogram for the energy cut and large pulse veto
+                        hPE.Fill(keV)# fill the histogram for the energy cut and large pulse veto
+                elif keV <= float(energyCut) and keV >500:
+                    hEmid.Fill(keV)
+                    hTEmid.Fill(tin)
+                elif keV < 500:
+                    hElo.Fill(keV)
+                    hTElo.Fill(tin)
+                    
             if ch == 2:
                 h2.Fill(keV)
                 hT2.Fill(tin)
@@ -282,7 +293,9 @@ def getNbeam(start=0, stop=1000, run = "Run33362", energyCut=1500, current=1.0, 
         ["both", start, stop, hPE.GetEntries(), stop-start+1 - nEvt , hPE.Integral(), hPE.GetRMS() ],
         ["LYSOnone", start, stop, h2.GetEntries(), stop-start+1 , h2.Integral(), h2.GetRMS()],
         ["LYSOlargeEarlyPulses", start, stop, hP2.GetEntries(), stop-start+1 - nEvt2, hP2.Integral(), hP2.GetRMS() ],
-        ]
+        ["energyLo", start, stop, hElo.GetEntries(), stop-start+1 , hElo.Integral(), hElo.GetRMS()],
+        ["energyMid", start, stop, hEmid.GetEntries(), stop-start+1 , hEmid.Integral(), hEmid.GetRMS()],
+    ]
     # name of csv file
     '''
     filename = "beamCounting_evt_"+str(stop)+".csv"
@@ -354,7 +367,6 @@ def getRate(before, during, after, current, nSamples):
         poissonErrEBG.append(pow( errBefore*errBefore + errDuring*errDuring + errAfter*errAfter, 0.5)/time[i])
         bgCounts.append(bg)
         i+=1
-       # print(i)
   #  print(signalRate)
     ret = [ start, stop, signalRate, poissonErr,  signal_BGRate, poissonErrBG, time, current, signalCounts, signal_BGCounts, bgCounts, signalEnergy, energyRate,poissonErrE, energyBGRate, poissonErrEBG ]
    # print(ret)
@@ -375,7 +387,8 @@ if __name__ == "__main__":
     nParts = int(args.nParts)
     run = "Run"+str(run)
     memDepth = 4096
-    
+    nCuts = 8
+
     if run=="Run33362":
         pairs = [
         [12000, 16000, 17000, 21500, 22000, 24000, 0.5], #0.5nA background
@@ -459,41 +472,41 @@ if __name__ == "__main__":
                   #  tuples start stop signalRate,     signal_BGRate,  poissonErr, poissonErrBG , rateS_BG, signal_BG,  time, current
     file =r.TFile.Open(filename,"RECREATE")
     
-    start =  array('f', [0,0 ,0, 0,0,0])
-    stop =  array('f', [0,0 ,0, 0,0,0])
-    signalRate =  array('f', [0,0 ,0, 0,0,0])
-    poissonErr  =  array('f', [0,0 ,0, 0,0,0])
-    signal_BGRate  =  array('f', [0,0 ,0, 0,0,0])
-    poissonErrBG  =  array('f',[0,0 ,0, 0,0,0])
-    time  =  array('f', [0,0 ,0, 0,0,0])
-    current  =  array('f', [0,0 ,0, 0,0,0])
-    signalCounts  = array('f', [0,0 ,0, 0,0,0])
-    signalEnergy  = array('f', [0,0 ,0, 0,0,0])
-    signal_BGCounts  = array('f', [0,0 ,0, 0,0,0])
-    bgCounts  = array('f', [0,0 ,0, 0,0,0])
-    ch  = array('f', [0,0 ,0, 0,0,0])
-    energyRate = array('f', [0,0,0,0,0,0])
-    energyRate_BG = array('f', [0,0,0,0,0,0])
-    poissonErrE = array('f', [0,0,0,0,0,0])
-    poissonErrEBG = array('f', [0,0,0,0,0,0])
+    start =  array('f', [0,0 ,0, 0,0,0,0,0])
+    stop =  array('f', [0,0 ,0, 0,0,0,0,0])
+    signalRate =  array('f', [0,0 ,0, 0,0,0,0,0])
+    poissonErr  =  array('f', [0,0 ,0, 0,0,0,0,0])
+    signal_BGRate  =  array('f', [0,0 ,0, 0,0,0,0,0])
+    poissonErrBG  =  array('f',[0,0 ,0, 0,0,0,0,0])
+    time  =  array('f', [0,0 ,0, 0,0,0,0,0])
+    current  =  array('f', [0,0 ,0, 0,0,0,0,0])
+    signalCounts  = array('f', [0,0 ,0, 0,0,0,0,0])
+    signalEnergy  = array('f', [0,0 ,0, 0,0,0,0,0])
+    signal_BGCounts  = array('f', [0,0 ,0, 0,0,0,0,0])
+    bgCounts  = array('f', [0,0 ,0, 0,0,0,0,0])
+    ch  = array('f', [0,0 ,0, 0,0,0,0,0])
+    energyRate = array('f', [0,0,0,0,0,0,0,0])
+    energyRate_BG = array('f', [0,0,0,0,0,0,0,0])
+    poissonErrE = array('f', [0,0,0,0,0,0,0,0])
+    poissonErrEBG = array('f', [0,0,0,0,0,0,0,0])
 
     tree = r.TTree("rates", "rates")
-    tree.Branch("start", start, "start[6]/F")
-    tree.Branch("stop", stop, "stop[6]/F")
-    tree.Branch("signalRate", signalRate, "signalRate[6]/F")
-    tree.Branch("poissonErr", poissonErr, "poissonErr[6]/F")
-    tree.Branch("signal_BGRate", signal_BGRate, "signal_BGRate[6]/F")
-    tree.Branch("poissonErrBG", poissonErrBG, "poissonErrBG[6]/F")
-    tree.Branch("time", time, "time[6]/F")
+    tree.Branch("start", start, "start[8]/F")
+    tree.Branch("stop", stop, "stop[8]/F")
+    tree.Branch("signalRate", signalRate, "signalRate[8]/F")
+    tree.Branch("poissonErr", poissonErr, "poissonErr[8]/F")
+    tree.Branch("signal_BGRate", signal_BGRate, "signal_BGRate[8]/F")
+    tree.Branch("poissonErrBG", poissonErrBG, "poissonErrBG[8]/F")
+    tree.Branch("time", time, "time[8]/F")
     tree.Branch("current", current, "current")
-    tree.Branch("signalCounts", signalCounts, "signalCounts[6]/F")
-    tree.Branch("signalEnergy", signalCounts, "signalEnergy[6]/F")
-    tree.Branch("signal_BGCounts", signal_BGCounts, "signal_BGCounts[6]/F")
-    tree.Branch("ch", ch, "ch[6]/F")
-    tree.Branch("energyRate", energyRate, "energyRate[6]/F")
-    tree.Branch("energyRate_BG", energyRate_BG, "energyRate_BG[6]/F")
-    tree.Branch("poissonErrE", poissonErrE, "poissonErrE[6]/F")
-    tree.Branch("poissonErrEBG", poissonErrEBG, "poissonErrEBG[6]/F")
+    tree.Branch("signalCounts", signalCounts, "signalCounts[8]/F")
+    tree.Branch("signalEnergy", signalCounts, "signalEnergy[8]/F")
+    tree.Branch("signal_BGCounts", signal_BGCounts, "signal_BGCounts[8]/F")
+    tree.Branch("ch", ch, "ch[8]/F")
+    tree.Branch("energyRate", energyRate, "energyRate[8]/F")
+    tree.Branch("energyRate_BG", energyRate_BG, "energyRate_BG[8]/F")
+    tree.Branch("poissonErrE", poissonErrE, "poissonErrE[8]/F")
+    tree.Branch("poissonErrEBG", poissonErrEBG, "poissonErrEBG[8]/F")
 
     h = r.TH1F("h",";Pulse rate (Hz); Counts", 100, 0, 250)
     hBG = r.TH1F("hBG",";Pulse rate (Hz); Counts", 100, 0, 250)
@@ -516,8 +529,7 @@ if __name__ == "__main__":
     graphsE = []
     graphsEBG = []
     rate_v_start =[]
-    
-    for i in range(6):
+    for i in range(nCuts):
         graphs.append(copy.deepcopy( r.TGraphErrors()) )
         graphsBG.append(copy.deepcopy(r.TGraphErrors()) )
         graphsE.append(copy.deepcopy(r.TGraphErrors()) )
@@ -530,18 +542,23 @@ if __name__ == "__main__":
         graphsEBG[i].SetMarkerStyle(32)
     graphs[0].SetTitle(";Beam current [nA];Pulse rate [Hz]")
     graphsE[0].SetTitle(";Beam current [nA];Summed pulse energy [keV]")
+    rate_v_start[0].SetTitle("Rate vs start, "+str(pairs[0][6])+" nA beam current ;Event start index;Pulse rate [Hz]")
 
     iPair = 0
     for pair in pairs:
         start[0] = pair[0]
         stop[0] = pair[1]
+        print("getting number of background pulses before")
         before = getNbeam(start[0],stop[0], run, energyCut, pair[6], memDepth)
         start[0] = pair[2]
         stop[0] = pair[3]
+        print("getting number of beam-induced pulses")
         during = getNbeam(start[0],stop[0], run, energyCut, pair[6],  memDepth)
         start[0] = pair[4]
         stop[0] = pair[5]
+        print("getting number of background pulses after")
         after = getNbeam(start[0],stop[0], run, energyCut, pair[6])
+        print("the length of before is: ", len(before) )
         ret = getRate(before, during, after, pair[6], end - begin)
         print("the return of getRate is " )
         print(ret)
@@ -594,7 +611,7 @@ if __name__ == "__main__":
         #then every run has an nutuple with the things we actually want to measure
         rows = [before, during, after]
         rows = []
-        for i in range(6):
+        for i in range(nCuts):
             rows.append([])
         i=-1
         for list in before:
@@ -635,6 +652,8 @@ if __name__ == "__main__":
     "veto and cut",
     "LYSO, none",
     "LYSO, largeEarlyPulses",
+    "lo energy cut",
+    "mid energy cut"
     ]
     for g in graphs:
         g.SetMinimum(10)
@@ -694,6 +713,7 @@ if __name__ == "__main__":
     can.SetLogx(1)
     i=0
     for g in rate_v_start:
+        leg = r.TLegend(0.2, 0.65, 0.4, 0.8)
         g.SetLineColor(p.colors[i])
         g.SetMarkerColor(p.colors[i])
         g.SetMarkerStyle(1)
@@ -701,11 +721,12 @@ if __name__ == "__main__":
        #     g.Draw("AP")
       #  else:
         g.Draw("AP")       # leg.AddEntry(g, "with background subtracted")
+        leg.AddEntry(g, cuts[i])
+        leg.Draw()
         g.Write("rate_v_start"+str(i))
         can.Write()
         p.savePlots(can,"./plots/"+run+"/", run+"_rate_v_startSummary"+str(i)+"_n"+str( g.GetN() ) )
         i+=1
-    leg.Draw()
     can.Write()
     i =0
   #  p.savePlots(can,"./plots/"+run+"/", "Run"+run+"_energySummary")
