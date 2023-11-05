@@ -57,12 +57,12 @@ def getBGSpectrum(tree, name):
     return h, ht, h2, ht2
 #get runs
 
-def getBeamRate( run = "Run33677", memDepth=4096):
+def getBeamRate( run = "Run33677", memDepth=4096, scale = 1.0):
 #tell me rate of beam pulses for a given run
     dir = "./pulse_data/"
     file =r.TFile.Open(dir+run,"READ")
     t=file.Get("pulses")
-    counts = 0
+    counts = [0,0,0,0, 0]
     if memDepth < 4096:
         return 0
     else:
@@ -79,14 +79,28 @@ def getBeamRate( run = "Run33677", memDepth=4096):
         coinc = t.coinc
         area = t.area
         iPulse = t.iPulse
-        if tP > begin and tP < end and iPulse>0 and ch ==1:
-            counts+=1
+       # if tP > begin and tP < end and iPulse>0 and ch ==1:
+        counts[0]+=1
+        if keV < 440:
+            counts[1]+=1
+        if keV >= 440 and keV < 520:
+            counts[2]+=1
+        if keV >= 520 and keV < 2300:
+            counts[3]+=1
+        if keV >= 2300:
+            counts[4]+=1
     time = evt * 25e-9 * (end-begin)
-    rate = counts/time
-    return rate
+    rate = []
+    error = []
+    for i in range(len(counts)):
+        rate.append(  counts[i]/time * scale )
+        error.append( pow(counts[i], 0.5)/time * scale )
+    return rate, error
     
 if __name__ == "__main__":
-    #r.gROOT.SetBatch(True)
+    #add parsing here
+
+    r.gROOT.SetBatch(True)
     dir = "./pulse_data/"
     file0 =r.TFile.Open(dir+"Run33677_dirpipulses.root","READ")
     t0=file0.Get("pulses")
@@ -137,7 +151,7 @@ if __name__ == "__main__":
     tauErrsC = []
         #in addition to taus and scales, we can get a direct measurement of the rate with pulse counting
     rates = []
-    
+    errors = []
     for run in runs:
         print("looping")
         times.append(offset + 2.0 + 4.0 * i)
@@ -187,7 +201,8 @@ if __name__ == "__main__":
         tausC.append(tau)
         tauErr *= nEvt
         tauErrsC.append(tauErr)
-        rates.append( getBeamRate( run , 65536) )
+        rates.append( getBeamRate( run , 65536, scales[i])[0] )
+        errors.append( getBeamRate( run , 65536, scales[i])[1] )
        # ht2.Fit("f1","R")
        # tau2 = -1.0/ (f1.GetParameter(1))
        # taus2.append(tau2)
@@ -199,6 +214,7 @@ if __name__ == "__main__":
         i+=1
         
     print("loop finished")
+    print("starting plotting")
     #[5.473939302289152, 5.848022149352433, 6.255403284859799, 6.779214655278007, 7.117872952411881, 7.436453168346582, 7.764800641956702, 8.1172037565354, 8.324471001179337, 8.641901384313158, 8.840880903006541, 9.144335511186412, 9.350988676919194]
     #hs.Draw()
    # p.savePlots(can, "./", "decay_gifs")
@@ -224,7 +240,21 @@ if __name__ == "__main__":
     f5 =  r.TF1("f5","x*[0]", 0, 100 )
     gT.Fit("f5")
     p.savePlots(can, "./", "nLYSOvsTau")
+ 
+    gR = r.TGraphErrors(i,np.array(times),  np.array( np.array(rates).T[1] ), np.ones( len(runs)  )*0.3, np.array( np.array(errors).T[1] ))
 
+    can.SetLogy(1)
+    gR.SetMarkerStyle(1)
+    gR.SetTitle("Decay analysis;Time after beam run [hr]; Pulse rate (440 keV < E < 520 keV) [Hz]")
+    # gR.SetMinimum(0)
+    #gR.SetMaximum(3e-5)
+    gR.SetMinimum(0.01)
+    gR.SetMaximum(0.05)
+    gR.Draw("ALP")
+    gR.SetMaximum(0.05)
+    f6 =  r.TF1("f6","expo", 0, 100 )
+    gR.Fit("f6")
+    p.savePlots(can, "./", "pulseRates460keV")
     #get the background spectra, (cuts on ch, coinc)
     h0,h0t  =   getBGSpectrum(t0, "h")[0:2]
     h1,h1t  =   getBGSpectrum(t1, "h1")[0:2]

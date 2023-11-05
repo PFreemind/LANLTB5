@@ -2,6 +2,7 @@ import cv2
 import matplotlib.pyplot as plot
 import pytesseract
 import numpy as np
+import imutils
 
 # import the necessary packages
 import numpy as np
@@ -101,18 +102,44 @@ while True:
     #could add noise reduction with fastNlMeansDenoisingColored ()
     #also, smarter edge detection?
    # foo,binary=cv2.threshold(warped, 160, 255, cv2.THRESH_BINARY)
-    binary = cv2.adaptiveThreshold(warped,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,151,2)
+    blurred = cv2.GaussianBlur(warped, (5, 5), 0)
+    edged = cv2.Canny(blurred, 50, 200, 255)
+    
+
+    cv2.imshow('warped', warped)
+
+    gaussian_3 = cv2.GaussianBlur(warped, (51, 51), 4.0)
+    unsharp_image = cv2.addWeighted(warped, 2.0, gaussian_3, -1.0, 0)
+    cv2.imshow('sharpened', unsharp_image)
+    binary = cv2.adaptiveThreshold( unsharp_image,255,cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY,101,-6)
+    cnts = cv2.findContours(binary.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = imutils.grab_contours(cnts)
+    cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
+    cv2.imshow('binary', binary)#
 #    cv2.imshow('foo',binary)
     #plot.imshow(gray_roi)
     # Use Tesseract OCR to extract text from the ROI
    # extracted_text = pytesseract.image_to_string(gray_roi)
+#split the frame into 4 characters
+    '''
+    w, h = binary.shape
+    
+    char0 = binary[0:w/4, 0:h]
+    char0 = binary[w/4:w/2, y1:y2]
+    char0 = binary[w/2:3*w/4, y1:y2]
+    char0 = binary[3*w/4:w, 0:h]
+    def extract_char(charImage):
+        
+    
+    extracted_char0 = extractChar(char0)
+    '''
     config = ' --psm 7 -c tessedit_char_whitelist=0123456789'
     extracted_text = pytesseract.image_to_string(binary, config=config)
-
+    
     # You can add additional processing here to filter and extract numbers from 'extracted_text'
 
     # Display the extracted text on the frame
-   # cv2.putText(binary, extracted_text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(binary, extracted_text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0))
  #   foo,gray_roi=cv2.threshold(roi_frame, 127, 255, cv2.THRESH_BINARY)
     # Display the frame with extracted text
     #cv2.accumulateWeighted(dst, binary, 0.1)
@@ -129,10 +156,10 @@ while True:
    # out= cv2.adaptiveThreshold(dst,160,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,11,2)
     #dst = dst*(1-alpha) + binary*alpha
     extracted_text = pytesseract.image_to_string(out, config=config)
-    cv2.putText(out, extracted_text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(out, extracted_text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 10, (0, 255, 0))
     cv2.imshow('Frame', out)
     # Break the loop if 'q' is pressed
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    if cv2.waitKey(100) & 0xFF == ord('q'):
         break
     
     ##hmmmm
@@ -148,7 +175,6 @@ while True:
     # can parse for numbers via contours
     #then check each number with nasty 7-segment explicit defintions. that's a decent amount of development...
     
-    #well fuck, this just doesn't work
  
 
 # Release the video capture object and close all OpenCV windows

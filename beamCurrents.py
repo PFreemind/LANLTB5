@@ -683,7 +683,7 @@ if __name__ == "__main__":
     can.Write()
     p.savePlots(can,"./plots/"+run+"/","Run"+run+"_rateSummary")
     i =0
-    leg = r.TLegend(0.2,0.65, 0.5, 0.85)
+    leg = r.TLegend(0.65,0.2, 0.8, 0.35)
     for g in graphsE:
         g.SetMinimum(100)
         g.SetLineColor(p.colors[i])
@@ -713,7 +713,7 @@ if __name__ == "__main__":
     can.SetLogx(1)
     i=0
     for g in rate_v_start:
-        leg = r.TLegend(0.2, 0.65, 0.4, 0.8)
+        leg = r.TLegend(0.65, 0.2, 0.8, 0.35)
         g.SetLineColor(p.colors[i])
         g.SetMarkerColor(p.colors[i])
         g.SetMarkerStyle(1)
@@ -725,7 +725,7 @@ if __name__ == "__main__":
         leg.Draw()
         g.Write("rate_v_start"+str(i))
         can.Write()
-        p.savePlots(can,"./plots/"+run+"/", run+"_rate_v_startSummary"+str(i)+"_n"+str( g.GetN() ) )
+        p.savePlots(can,"./plots/"+run+"/", run+"_rate_v_startSummary_n"+str( g.GetN() )+"_"+str(i) )
         i+=1
     can.Write()
     i =0
