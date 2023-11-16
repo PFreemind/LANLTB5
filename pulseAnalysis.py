@@ -763,12 +763,11 @@ def trimEmptyRuns(runList, remote=False):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser(description='measure some beam currents')
-  parser.add_argument('-f', '--first', help='first run',type=int, default = 33811 )
-  parser.add_argument('-l', '--last', help='last run',type=int, default = 33900 )
-  parser.add_argument('-t', '--noTrees', action ='store_true', help = 'bool for making ROOT trees' )
-  parser.add_argument('-p', '--noPlots', action ='store_true',  help = 'bool for making plots')
+  parser.add_argument('-f', '--first', help='first (global) run number',type=int, default = 33300 )
+  parser.add_argument('-l', '--last', help='last (global) run number ',type=int, default = 40000 )
+  parser.add_argument('-t', '--noTrees', action ='store_true', help = 'use this option to turn off tree making' )
+  parser.add_argument('-p', '--noPlots', action ='store_true',  help = 'use this option to turn off plotting')
   
-
   args = parser.parse_args()
   first = args.first
   last = args.last

@@ -13,7 +13,7 @@ r.gROOT.SetBatch(True)
 
 parts = [ 3, 10, 20, 30, 50, 100]
 runs = [
-"33362", #sept 7 dedicated running
+"52539", #sept 7 dedicated running
 #"33478", #10 pA run
 #"33498"  #longer 10 pA run
 ]
