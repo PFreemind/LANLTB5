@@ -3,6 +3,7 @@ import matplotlib.pyplot as plot
 import pytesseract
 import numpy as np
 import imutils
+import ssocr
 
 # import the necessary packages
 import numpy as np
@@ -114,10 +115,11 @@ def getDigit(input_image, x1, x2, y1, y2):
 import argparse
 
 if __name__ == "__main__":
+    outDir ="/Users/patfreeman/Desktop/UCSB/xrayDet/LANLTB5/cropped/"
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-t', '--throttle', type = int, default ='10',  help='throttle the video reading, 1/throttle frames of the video are processed'  )
+    parser.add_argument('-t', '--throttle', type = int, default ='100',  help='throttle the video reading, 1/throttle frames of the video are processed'  )
     args = parser.parse_args()
     throttle = args.throttle
 
@@ -197,6 +199,7 @@ if __name__ == "__main__":
             cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
             cv2.drawContours(binary, cnts, -1, (128, 0, 0), 4)
             cv2.imshow('binary', binary)#
+            cv2.imwrite(outDir+"/PiCropped_"+str(iFrame)+".jpg", binary)
 
         #    cv2.imshow('foo',binary)
             #plot.imshow(gray_roi)
@@ -211,7 +214,7 @@ if __name__ == "__main__":
             x0shift = 20
             y1shift = 10
 
-            
+            '''
             if iFrame >  frameOfCameraBump:
                 xBump = 30
                 yBump = 30
@@ -224,9 +227,14 @@ if __name__ == "__main__":
                 chars.append( binary[ offset:h - offset*2, int(w/4)+ offset:int(w/2) - offset*2] )
                 chars.append( binary[ offset:h - offset*2, int(w/2)+ offset:int(3*w/4) -offset*2] )
                 chars.append( binary[ offset:h - offset*2, int(3*w/4)+ offset:w - offset*2] )
-                    
+            '''
+            shift = 4
+            for j in range(4):
+                [x,y,w,l ] = cv2.boundingRect(cnts[j])
+                
+                chars.append( binary[ y  : y + l , x  : x + w ] )
             i=-1
-            config = ' --psm 7 -c tessedit_char_whitelist=0123456789 --psm 10'
+            config = ' --psm 7 -c tessedit_char_whitelist=0123456789 --psm 10 --seven-seg'
             reading =""
             noneFlag = 0
             for char in chars:
@@ -247,7 +255,8 @@ if __name__ == "__main__":
                 if extracted_text is None:
                     noneFlag = 1
                     continue
-           
+           #     reading = ssocr.main( cv2.bitwise_not(binary) )
+
               #  cv2.imshow('char'+str(i), char )
                 cv2.putText(char, str(extracted_text), (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0))
                 cv2.imshow('char'+str(i), char )
@@ -285,8 +294,8 @@ if __name__ == "__main__":
             #cv2.putText(out, extracted_text, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 10, (0, 255, 0))
          #   cv2.imshow('Frame', out)
             # Break the loop if 'q' is pressed
-            if cv2.waitKey(100) & 0xFF == ord('q'):
-                break
+          #  if cv2.waitKey(100) & 0xFF == ord('q'):
+           #     break
             
             ##hmmmm
             #break image into 4 parts, check each letter individually

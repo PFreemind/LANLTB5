@@ -8,6 +8,7 @@ import math
 import csv
 import pulseAnalysis as p
 import copy
+
 r.gStyle.SetOptFit(0)
     
 def plotSigmaCurves(parts, run): #to be run on the pulseCounting.root file produced by beamCurrents.py, see beamCurrentJobs.py for implementation
@@ -382,41 +383,75 @@ def getRate(before, during, after, current, nSamples):
    # print(ret)
     return ret
 
-def getHist(g): #gets a histogram from a tgrapherrors
+def getHist(g, xLow, xHigh, name = "",): #gets a histogram from a tgrapherrors
 #use histograms instead of graphs
     # get first and last x-values to set histogram limits
     n = g.GetN()
-    xLow = g.GetPointX(0)
-    xHigh = g.GetPointX(n-1)
+   # xLow = g.GetPointX(0)
+    #xHigh = g.GetPointX(n-1)
+    print("creating histogram with bin limits ", xLow, " ", xHigh)
     # create histograms, making sure that the overlapping times match
-    hG = r.TH1F("hFromTGraph", "", n, xLow, xHigh)
-    for i in range(n):
-        hG.SetBinContent(i, g.GetPointY(i))
-       # print(g.GetPointY(i))
-       #print("bin content ", h.GetBinContent(i))
-        hG.SetBinError(i, g.GetErrorY(i))
+    hG = r.TH1F("hFromTGraph"+name, "", n , xLow, xHigh)
+    for k in range(n):
+        print("are we using i? ", k)
+        hG.SetBinContent(k+1, g.GetPointY(k))
+   #     print(g.GetPointY(i))
+  #      print("bin content ", hG.GetBinContent(i))
+        hG.SetBinError(k+1, g.GetErrorY(k))
+
     return hG
     #
 #then you can use chi2test for comparison
 #
 
-def getScale(h1, h2, min =0.3 , max =0.5, nSteps = 100):
+def getScale(h1, h2, min , max, nSteps = 100):
+  #  xmin = h1.GetXaxis().GetXmin()
+  #  xmax = h1.GetXaxis().GetXmax()
+  #  htmp = r.TH1F("htmp","", h1.GetNBins(), xmin, xmax )
+  #  for i in range h2.GetNBins():
+   #     x = h1.GetBinCenter(i)
+    #    y = h1.GetBinContent(i)
+     #   bin = max ( flr( float(x- xmin)/float(xmax-xmin) ) )
+      #  htmp.SetBinContent(bin, htmp.GetBinContent(bin) + y )
+       # htmp.SetBinContent(bin, htmp.GetBinContent(bin) + y )
+
     for i in range(nSteps):
-         scale = (0.3 * pow( 0.5/0.3 , float(i)/float(nSteps) ) )
-         htmp = r.TH1F("htmp","", h1.GetNBins(), h1.GetXaxis().GetXmin(), h1.GetXaxis().GetXmax() )
-         print("test scale: ", scale)
+         scale = (min * pow( max/min , float(i)/float(nSteps) ) )
+         
+       #  print("test scale: ", scale)
          h2.Scale(scale)
          #rebin h2 to match h1
-         chi2 = h1.Chi2Test(h2, "W")
+         chi2 = h1.Chi2Test(copy.deepcopy(h2), "W")
          if i ==0 :
             minChi2 = chi2
             mindex = i
          if chi2 < minChi2:
             minChi2 = chi2
             mindex = i
-    scale = (0.3 * pow( 0.5/0.3 , mindex/nSteps ) )
+    scale = (min * pow( max/min , mindex/nSteps ) )
     return scale, minChi2
-    
+ 
+def getPairs(run):
+    filename = "./pulse_data/"+str(run)+"_beamCurrents.csv"
+    f = open(filename, 'r')
+    lines = f.readlines()
+    i=-1
+    pairs = []
+    for line in lines:
+        i+=1
+        if i == 0:
+            continue
+        pair = []
+        for entry in line.split(","):
+            pair.append(float(entry))
+        pairs.append(pair)
+    print("got these pairs from the csv file:\n", pairs )
+    return pairs
+#read .csv file
+
+#it either has an array or arrays or an arrray and a number of partitions
+
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='measure some beam currents')
@@ -439,6 +474,13 @@ if __name__ == "__main__":
     nCuts = 8
     if batch:
         r.gROOT.SetBatch(True)
+        
+    pairs = getPairs(run)
+    if nParts>1:
+        parts = np.linspace (pairs[-1][2], pairs[-1][3], nParts+1)
+        for i in range (nParts):
+            part = [pairs[-1][0], pairs[-1][1], parts[i], parts[i+1], pairs[-1][4], pairs[-1][5], pairs[-1][6]]
+            pairs.append(part)
     if run=="Run33362":
     # beforeBeam start index, before stop index, during start, during end, after start, after end, beam Current (nA)
         pairs = [
@@ -611,7 +653,6 @@ if __name__ == "__main__":
         for l in lines:
             electrometer_v_time[0].AddPoint(float(l.split(",")[0]) + correction , float(l.split(",")[1]))
     mean = electrometer_v_time[0].GetMean(2)
-    hElectrometer = getHist(electrometer_v_time[0])
     mean*=2.7
     electrometer_v_time[0].Scale(1./mean)
 
@@ -623,13 +664,13 @@ if __name__ == "__main__":
         rate_v_time.append(copy.deepcopy(r.TGraphErrors()) )
         rate_v_time[i].SetTitle("Rate vs start, "+str(pairs[0][6])+" nA beam current ;Time [s];Pulse rate [Hz]")
         rate_v_time[i].GetXaxis().SetTickLength(0.01)
-        rate_v_time[i].GetXaxis().SetNdivisions(100)
+        rate_v_time[i].GetXaxis().SetNdivisions(10000)
        # rate_v_time[i].GetXaxis().SetRangeUser(0, 1e4)
         rate_v_time[i].GetXaxis().SetLimits(0, 1e4)
         rate_v_timeBG.append(copy.deepcopy(r.TGraphErrors()) )
         rate_v_timeBG[i].SetTitle("Rate vs start, "+str(pairs[0][6])+" nA beam current ;Time [s];Pulse rate [Hz]")
         rate_v_timeBG[i].GetXaxis().SetTickLength(0.01)
-        rate_v_timeBG[i].GetXaxis().SetNdivisions(100)
+        rate_v_timeBG[i].GetXaxis().SetNdivisions(10000)
        # rate_v_time[i].GetXaxis().SetRangeUser(0, 1e4)
         rate_v_timeBG[i].GetXaxis().SetLimits(0, 1e4)
         graphs[i].SetMarkerStyle(1)
@@ -817,6 +858,8 @@ if __name__ == "__main__":
     can.SetLogy(1)
     can.SetLogx(1)
     i=0
+    can.SetLogx(0)
+    hPMT = []
     for g in rate_v_time:
         leg = r.TLegend(0.65, 0.2, 0.8, 0.35)
         g.SetLineColor(p.colors[i])
@@ -829,10 +872,40 @@ if __name__ == "__main__":
         g.GetXaxis().SetLimits(0, 1e4)
         g.GetXaxis().SetRangeUser(0, 1e4)
         g.Draw("APL")       # leg.AddEntry(g, "with background subtracted")
+  
         mean = g.GetMean(2)
-        hPMT = getHist(g)
+        spacing =  float(g.GetPointX(1) - g.GetPointX(0)) / 2.
         g.Scale(1./mean)
-      #  scale, chi2 = getScale(hPMT, hElectrometer)
+        hPMT.append( getHist(g,  g.GetPointX(0) - spacing , g.GetPointX(g.GetN()-1 ) + spacing, "PMT"+str(i)  ) )
+        hPMT[i].Draw()
+      #  nEntries  = hPMT[i].GetEntries()
+       # scale = 1.0/(float(nEntries)) * float(nParts)
+        #hPMT[i].GetEntries()
+        #print("nentries is SDGVBJCSDBFJHDBIDSNCIBJNDCKJSDNJCKSEI: ", hPMT[i].GetEntries(), "  ", nentries )
+        #print("scale is SDGVBJCSDBFJHDBIDSNCIBJNDCKJSDNJCKSEI: ", scale )
+        #hPMT[i].Scale(1.0000/scale )
+        xmin = hPMT[i].GetBinCenter(1) - hPMT[i].GetBinWidth(0)/2
+        xmax = hPMT[i].GetBinCenter(nParts) + hPMT[i].GetBinWidth(nParts)/2
+        if i == 0:
+            htmp =  r.TH1F("htmp"+str(i),"", hPMT[i].GetNbinsX(), xmin, xmax )
+            for j in range( electrometer_v_time[0].GetN()):
+                x = electrometer_v_time[0].GetPointX(j)
+                y = electrometer_v_time[0].GetPointY(j)
+                bin =  math.floor( float(x - xmin)/float(xmax-xmin) * float(nParts) ) + 1 #%of range * nPartitions
+                if bin < 1 or bin > hPMT[i].GetNbinsX() :
+                    continue
+                htmp.SetBinContent(bin, htmp.GetBinContent(bin) + y )
+               # htmp.SetBinError(bin, htmp.GetBinContent(bin) + y )
+                print("y:", y)
+                print("filling bin ", bin, " with value ", htmp.GetBinContent(bin) )
+            hscale  = float( htmp.Integral() )
+            htmp.Scale(1.000/hscale * float(nParts) )
+    
+       # buffer = 1e-12
+       
+      #  htmp.Scale(scale)
+       # print("the scale is: ", scale)
+       # htmp.Draw()
         scale = 1.
         leg.AddEntry(g, cuts[i] + " scale = " + str(scale) )
         electrometer_v_time[0].Scale(scale)
@@ -841,8 +914,46 @@ if __name__ == "__main__":
         g.Write("rate_v_time"+str(i))
         can.Write()
         p.savePlots(can,"./plots/"+run+"/", run+"_rate_v_time_n"+str( g.GetN() )+"_"+str(i) )
+       
+        can.SetLogy(0)
+        span = xmax - xmin
+        hPMT[i].GetXaxis().SetRangeUser(xmin - span/2, xmax + span/2)
+        hPMT[i].GetXaxis().SetNdivisions(20)
+        hPMT[i].GetYaxis().SetRangeUser(0, 2)
+        hPMT[i].GetYaxis().SetNdivisions(20)
+        hPMT[i].SetLineColor(p.colors[i])
+        hPMT[i].SetMarkerColor(p.colors[i])
+        hPMT[i].SetTitle(";time [s]; pulse rate [a.u.]")
+        hPMT[i].Draw()
+     #   input()
+        htmp.Draw("same")
+        leg = r.TLegend(0.35, 0.2, 0.65, 0.35)
+        leg.AddEntry(hPMT[i], cuts[i])
+        leg.AddEntry(htmp, "Electrometer readings")
+        leg.Draw()
+        p.savePlots(can,"./plots/"+run+"/", run+"_hrate_v_time_n"+str( g.GetN() )+"_"+str(i) )
+        #subtract and scale electrometer data to make pull plot
+        hPMT[i].Sumw2()
+        hPMT[i].Add(htmp, -1.0)
+        hpulls = hPMT[i]
+        hpulls.SetTitle(";time [s]; difference [#sigma]")
+       # hPMT[i].Add(htmp, 1.0)
+        for j in range(1, hpulls.GetNbinsX()): #skip 0th bin, reserved for underflow
+          #  print("value: ", hpulls.GetBinContent(j) )
+           # print("value: ", hpulls.GetBinError(j) )
+            hpulls.SetBinContent(j, hpulls.GetBinContent(j)/hpulls.GetBinError(j)  )
+        hpulls.GetXaxis().SetRangeUser(xmin - span/2, xmax + span/2)
+        hpulls.GetXaxis().SetNdivisions(5)
+        hpulls.GetYaxis().SetRangeUser(-5,5)
+        hpulls.GetYaxis().SetNdivisions(10)
+        hpulls.Draw("")
+        leg = r.TLegend(0.35, 0.2, 0.65, 0.35)
+        leg.AddEntry(hpulls, cuts[i])
+        leg.Draw()
+        p.savePlots(can,"./plots/"+run+"/", run+"_rate_pull_v_time_n"+str( g.GetN() )+"_"+str(i) )
         i+=1
     i=0
+    #electrometer plots
     for g in rate_v_timeBG:
         leg = r.TLegend(0.65, 0.2, 0.8, 0.35)
         g.SetLineColor(p.colors[i])
@@ -852,12 +963,13 @@ if __name__ == "__main__":
        # if i ==0:
        #     g.Draw("AP")
       #  else:
-        g.GetXaxis().SetLimits(0, 1e4)
-        g.GetXaxis().SetRangeUser(0, 1e4)
+      #  g.GetXaxis().SetLimits(0, 1e4)
+       # g.GetXaxis().SetRangeUser(0, 1e4)
         g.Draw("APL")       # leg.AddEntry(g, "with background subtracted")
         mean = g.GetMean(2)
         g.Scale(1./mean)
         leg.AddEntry(g, cuts[i])
+             #   electrometer_v_time[0].GetXaxis().SetRangeUser((0, 1e4)  )
         electrometer_v_time[0].Draw("same")
         leg.Draw()
         g.Write("rate_v_timeBG"+str(i))

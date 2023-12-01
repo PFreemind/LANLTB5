@@ -767,12 +767,15 @@ if __name__ == "__main__":
   parser.add_argument('-l', '--last', help='last (global) run number ',type=int, default = 40000 )
   parser.add_argument('-t', '--noTrees', action ='store_true', help = 'use this option to turn off tree making' )
   parser.add_argument('-p', '--noPlots', action ='store_true',  help = 'use this option to turn off plotting')
-  
+  parser.add_argument('-b', '--batch', action ='store_true', help = 'bool for running batch mode' )
   args = parser.parse_args()
   first = args.first
   last = args.last
   noTrees = args.noTrees
   noPlots = args.noPlots
+  batch = args.batch
+  if batch:
+    r.gROOT.SetBatch(True)
   runs = [8312, 8313] # [8122, 8123, 8124, 8125, 8126]#8116, 8117, 8118, 8119, 8120]
   dir = './pulse_data/'
   exceptions = []
